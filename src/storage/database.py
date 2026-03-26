@@ -37,6 +37,18 @@ class LocationRecord(Base):
     s3_synced_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
 
+class SegmentLabelRecord(Base):
+    __tablename__ = "segment_labels"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    commute_id = Column(String(64), nullable=False, index=True)
+    segment_id = Column(Integer, nullable=False)
+    original_mode = Column(String(32), nullable=False)
+    corrected_mode = Column(String(32), nullable=False)
+    notes = Column(Text, nullable=False, default="")
+    labeled_at = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
 class Database:
     def __init__(self, database_url: str):
         connect_args = {}

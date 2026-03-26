@@ -20,11 +20,13 @@ import altair as alt
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import DERIVED_DATA_DIR
+import json
+
+from src.config import DATABASE_URL
+from src.storage.database import Database
 from src.storage.derived_store import DerivedStore
 from src.storage.label_store import LabelStore
 
-LABELS_PATH = Path(DERIVED_DATA_DIR) / "labels.json"
 TRANSPORT_MODES = ["stationary", "walking", "driving", "train"]
 MODE_COLORS = {
     "walking": "#2ecc71",
@@ -40,7 +42,9 @@ st.markdown(
 )
 
 store = DerivedStore()
-label_store = LabelStore(LABELS_PATH)
+db = Database(DATABASE_URL)
+db.create_tables()
+label_store = LabelStore(db)
 commutes = store.get_commutes()
 
 if commutes.is_empty():
@@ -361,7 +365,7 @@ with st.expander("All Labels (all commutes)"):
         st.dataframe(all_data, use_container_width=True, hide_index=True)
         st.download_button(
             "Download labels as JSON",
-            data=LABELS_PATH.read_text() if LABELS_PATH.exists() else "{}",
+            data=json.dumps(label_store.export_json(), indent=2),
             file_name="commute_labels.json",
             mime="application/json",
         )
