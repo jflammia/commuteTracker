@@ -1,0 +1,32 @@
+[project]
+name = "commute-tracker"
+version = "0.1.0"
+description = "Collect, segment, and analyze daily commute GPS data"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "polars>=1.0",
+    "duckdb>=1.0",
+    "streamlit>=1.40",
+    "folium>=0.18",
+    "pyarrow>=18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter",
+    "matplotlib",
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
