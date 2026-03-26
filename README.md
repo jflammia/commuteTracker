@@ -1,65 +1,274 @@
-# Commute Tracker
+<p align="center">
+  <h1 align="center">Commute Tracker</h1>
+  <p align="center">
+    Self-hosted GPS commute analytics with automatic transport mode detection
+    <br />
+    <a href="docs/api-reference.md"><strong>API Reference</strong></a>
+    &nbsp;&middot;&nbsp;
+    <a href="docs/mcp-integration.md"><strong>MCP Integration</strong></a>
+    &nbsp;&middot;&nbsp;
+    <a href="docs/setup_owntracks.md"><strong>OwnTracks Setup</strong></a>
+  </p>
+</p>
 
-Collect GPS/time data during daily commutes, segment into legs (walk, drive, train), and analyze via dashboards. Designed for durability-first: raw data is immutable and everything else is re-derivable.
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
+  <img alt="Docker" src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" />
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-enabled-8A2BE2" />
+</p>
+
+---
+
+Commute Tracker collects GPS data from your phone via [OwnTracks](https://owntracks.org/), automatically segments commutes into transport modes (walking, driving, train, waiting), and provides dashboards and analytics to optimize your daily travel. Raw data is immutable and everything else is re-derivable.
+
+**Key design principles:**
+- **Durability-first** — raw GPS data is append-only, backed up to S3, never modified
+- **AI-first** — native MCP server for LLM integration alongside REST API
+- **Self-hosted** — runs on your hardware, no cloud dependencies, no vendor lock-in
+- **Progressive** — zero-config start, add geofences/labels/ML as you go
+
+## Features
+
+- **Automatic GPS collection** from OwnTracks (iOS/Android) via HTTP POST
+- **Transport mode detection** with pluggable ensemble classifier (speed, variance, waypoints, corridors)
+- **5 transport modes**: walking, driving, train, waiting, stationary
+- **Interactive dashboard** with maps, speed timelines, segment analysis, departure optimizer, and trends
+- **Segment labeling UI** for correcting classifications and building ML training data
+- **Multi-level label intelligence** — LLMs can review and correct at segment, commute, or batch level
+- **REST API** with 24 endpoints and interactive Swagger docs
+- **MCP server** for LLM integration (11 tools, 12 resources, 4 prompts)
+- **SQL queries** over processed data via DuckDB
+- **ML pipeline** with decision tree classifier trained on your corrections
+- **S3-compatible backup** with configurable local retention and pruning
+- **OwnTracks Recorder passthrough** for parallel use with existing setups
 
 ## Quick Start
 
+### Docker (recommended)
+
 ```bash
-# Install dependencies
+git clone https://github.com/jflammia/commuteTracker.git
+cd commuteTracker
+cp .env.example .env
+# Edit .env with your home/work coordinates
+
+docker compose up -d
+```
+
+This starts:
+- **Receiver + API + MCP** on port `8080`
+- **Dashboard** on port `8501`
+
+Point OwnTracks to `http://your-server:8080/pub` and you're collecting data.
+
+### Local Development
+
+```bash
 pip install -e ".[dev]"
 
-# Run the receiver + API + MCP server
+# Start the server (receiver + API + MCP)
 uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080
 
-# Run the dashboard
+# In a second terminal, start the dashboard
 streamlit run src/dashboard/app.py
 ```
 
-With Docker:
+### Verify It's Working
 
 ```bash
-docker compose up        # Starts receiver (port 8080) + dashboard (port 8501)
+# Health check
+curl http://localhost:8080/api/v1/health
+
+# Swagger docs
+open http://localhost:8080/docs
+
+# Dashboard
+open http://localhost:8501
 ```
 
 ## Architecture
 
 ```
-OwnTracks (iPhone)
+OwnTracks (iOS/Android)
        |  HTTP POST
        v
 FastAPI Server (:8080)
-  ├── POST /pub          OwnTracks receiver (always returns 200)
-  ├── /api/v1/*          REST API (Swagger UI at /docs)
-  └── /mcp               MCP server (Streamable HTTP for LLM integration)
+  ├── POST /pub            OwnTracks receiver (always returns 200)
+  ├── GET  /api/v1/*       REST API (Swagger UI at /docs)
+  ├── POST /api/v1/*       Label corrections, rebuild, ML training
+  └── /mcp                 MCP server (Streamable HTTP)
        |
        v
-  SQLite/PostgreSQL  -->  Processing Pipeline  -->  derived/*.parquet
-       |                                                  |
-       v                                                  v
-  S3 backup (optional)                        Streamlit Dashboard (:8501)
-                                              Jupyter / ML / LLM agents
+  SQLite / PostgreSQL ──> Processing Pipeline ──> derived/*.parquet
+       |                    (enrich, detect,        |
+       v                     segment, classify)     v
+  S3 backup (optional)                    Streamlit Dashboard (:8501)
+                                          Jupyter / ML / LLM agents
 ```
+
+### How It Works
+
+1. **Collect** — OwnTracks sends GPS points every 10 seconds to the receiver
+2. **Store** — Raw JSON payloads are written to SQLite (and optionally backed up to S3 as JSONL)
+3. **Process** — The pipeline enriches points with speed/distance, detects commutes via geofences, segments by transport mode changes, and classifies each segment
+4. **Analyze** — Dashboard, API, SQL, or MCP — pick your interface
+5. **Improve** — Label corrections feed back into the classifier and ML model
+
+## Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite:///data/commute_tracker.db` | SQLite or PostgreSQL connection string |
+| `HOME_LAT`, `HOME_LON` | `0.0` | Home location for commute detection |
+| `WORK_LAT`, `WORK_LON` | `0.0` | Work location for commute detection |
+| `HOME_RADIUS_M` | `150` | Geofence radius for home (meters) |
+| `WORK_RADIUS_M` | `150` | Geofence radius for work (meters) |
+| `S3_ENDPOINT_URL` | — | S3-compatible storage for backup (optional) |
+| `S3_BUCKET` | `commute-tracker-raw` | S3 bucket name |
+| `S3_SYNC_INTERVAL_SECONDS` | `300` | How often to sync to S3 |
+| `LOCAL_RETENTION_DAYS` | `90` | Prune synced records older than this (0 = keep all) |
+| `RECORDER_URL` | — | Forward payloads to OwnTracks Recorder (optional) |
+| `DERIVED_DATA_DIR` | `./derived` | Where to write processed Parquet files |
 
 ## Interfaces
 
-| Interface | URL | Purpose |
-|-----------|-----|---------|
-| OwnTracks receiver | `POST /pub` | GPS data collection from phone |
-| REST API | `/api/v1/*` | Programmatic access (24 endpoints) |
-| OpenAPI docs | `/docs` | Interactive Swagger UI |
-| MCP server | `/mcp` | LLM integration (11 tools, 12 resources, 4 prompts) |
-| Dashboard | `:8501` | Streamlit analytics UI |
+### REST API
 
-## Data
+24 endpoints at `/api/v1/*` — interactive docs at [`/docs`](http://localhost:8080/docs).
 
-- `raw/` — Immutable JSONL files, one per day. **Not in git.** Backed up to NAS + cloud.
-- `derived/` — Parquet files rebuilt from raw. **Not in git.**
+```bash
+# List commutes
+curl http://localhost:8080/api/v1/commutes
 
-## Docs
+# Get segments for a commute
+curl http://localhost:8080/api/v1/commutes/2026-03-26-morning/segments
 
-- [API Reference](docs/api-reference.md) — REST API endpoints, request/response examples
-- [MCP Integration](docs/mcp-integration.md) — LLM integration guide, tools, resources, workflows
-- [Project Plan](docs/project_plan.md) — Full architecture, phases, and decisions
-- [OwnTracks Setup](docs/setup_owntracks.md) — Phone configuration guide
-- [ADR-001: Storage](docs/decisions/adr-001-storage-architecture.md) — SQLite + S3 design
-- [ADR-002: Classifier](docs/decisions/adr-002-classifier-architecture.md) — Ensemble classifier design
+# Run a SQL query
+curl -X POST http://localhost:8080/api/v1/query \
+  -H 'Content-Type: application/json' \
+  -d '{"sql": "SELECT commute_direction, avg(speed_kmh) FROM commute_data GROUP BY commute_direction"}'
+
+# Review classifications with AI-powered mismatch detection
+curl http://localhost:8080/api/v1/labels/review?n=5
+```
+
+See [API Reference](docs/api-reference.md) for all endpoints.
+
+### MCP Server (LLM Integration)
+
+Native [Model Context Protocol](https://modelcontextprotocol.io/) server at `/mcp` — Streamable HTTP, stateless, JSON responses.
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "commute-tracker": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+The MCP server provides:
+- **12 resources** — read commutes, segments, points, stats, labels
+- **11 tools** — query data, add labels, review classifications, rebuild, train ML
+- **4 prompts** — analyze commute, optimize departure, review classifications, weekly report
+
+The multi-level label intelligence tools let an LLM review and correct at the right granularity:
+
+| Level | Tool | Use When |
+|-------|------|----------|
+| Low | `analyze_segment` | Deep-dive into one suspicious segment |
+| Mid | `review_commute_labels` | Review all segments in a commute |
+| High | `review_recent_labels` | Batch audit across multiple commutes |
+| Action | `apply_label_corrections` | Apply corrections above a confidence threshold |
+
+See [MCP Integration Guide](docs/mcp-integration.md) for full tool reference and workflows.
+
+### Dashboard
+
+Six-page Streamlit dashboard at port `8501`:
+
+1. **Daily Commute** — map with colored segments, speed timeline
+2. **Segment Analysis** — per-leg performance over time, variability
+3. **Departure Optimizer** — find the best time to leave
+4. **Trends & Patterns** — weekly/monthly aggregates, mode split
+5. **Label Commute** — interactive correction UI for segment classifications
+6. **Rebuild** — re-process raw data with filters
+
+## Data Storage
+
+| Directory | Contents | In Git | Backed Up |
+|-----------|----------|--------|-----------|
+| `raw/` | Immutable JSONL files (one per day) | No | NAS + S3 |
+| `derived/` | Parquet files (rebuilt from raw) | No | Not needed |
+| SQLite DB | Raw records + labels | No | S3 sync |
+
+**Durability guarantees:**
+- OwnTracks queues data on-device if the server is unreachable
+- The receiver always returns HTTP 200 (OwnTracks discards data on 4xx)
+- Raw data is append-only and never modified
+- S3 sync runs every 5 minutes with automatic retry
+- All derived data can be rebuilt from raw at any time
+
+## Development
+
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run linter
+ruff check src/ tests/
+
+# Run a single test file
+pytest tests/test_api_service.py -v
+```
+
+### Project Structure
+
+```
+src/
+  receiver/        # FastAPI OwnTracks endpoint
+  api/             # REST API routes + service layer
+  mcp_server.py    # MCP server for LLM integration
+  processing/      # Pipeline: enricher, commute detector, segmenter, classifiers
+  storage/         # Database, derived store, label store, S3 sync
+  dashboard/       # Streamlit app + pages
+  ml/              # ML model training and evaluation
+  config.py        # Environment-based configuration
+tests/             # 188 tests
+docs/              # API reference, MCP guide, ADRs
+```
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [API Reference](docs/api-reference.md) | REST API endpoints, request/response examples |
+| [MCP Integration](docs/mcp-integration.md) | LLM integration guide, tools, resources, workflows |
+| [OwnTracks Setup](docs/setup_owntracks.md) | Phone configuration guide |
+| [Project Plan](docs/project_plan.md) | Architecture, phases, and decisions |
+| [ADR-001: Storage](docs/decisions/adr-001-storage-architecture.md) | SQLite + S3 storage design |
+| [ADR-002: Classifier](docs/decisions/adr-002-classifier-architecture.md) | Ensemble classifier architecture |
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Run tests (`pytest`) and linting (`ruff check src/ tests/`)
+4. Commit your changes
+5. Open a pull request
+
+## License
+
+MIT
