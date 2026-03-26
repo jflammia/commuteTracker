@@ -144,8 +144,8 @@ if all_segments:
                 color=alt.Color(
                     "transport_mode:N",
                     scale=alt.Scale(
-                        domain=["walking", "driving", "train", "stationary"],
-                        range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                        domain=["walking", "driving", "train", "waiting", "stationary"],
+                        range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                     ),
                     title="Mode",
                 ),
@@ -165,8 +165,8 @@ if all_segments:
                 color=alt.Color(
                     "transport_mode:N",
                     scale=alt.Scale(
-                        domain=["walking", "driving", "train", "stationary"],
-                        range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                        domain=["walking", "driving", "train", "waiting", "stationary"],
+                        range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                     ),
                     title="Mode",
                 ),

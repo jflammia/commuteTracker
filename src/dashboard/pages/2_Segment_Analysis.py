@@ -73,8 +73,8 @@ if not duration_chart_data.empty:
             color=alt.Color(
                 "transport_mode:N",
                 scale=alt.Scale(
-                    domain=["walking", "driving", "train", "stationary"],
-                    range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                    domain=["walking", "driving", "train", "waiting", "stationary"],
+                    range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                 ),
             ),
             tooltip=["date", "segment_label", "duration_min", "avg_speed_kmh"],
@@ -123,8 +123,8 @@ if not variability.is_empty():
             color=alt.Color(
                 "transport_mode:N",
                 scale=alt.Scale(
-                    domain=["walking", "driving", "train", "stationary"],
-                    range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                    domain=["walking", "driving", "train", "waiting", "stationary"],
+                    range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                 ),
                 legend=None,
             ),
@@ -149,8 +149,8 @@ if not box_data.empty:
             color=alt.Color(
                 "transport_mode:N",
                 scale=alt.Scale(
-                    domain=["walking", "driving", "train", "stationary"],
-                    range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                    domain=["walking", "driving", "train", "waiting", "stationary"],
+                    range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                 ),
                 legend=None,
             ),

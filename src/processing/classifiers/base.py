@@ -13,7 +13,7 @@ import polars as pl
 
 
 # All recognized transport modes
-TRANSPORT_MODES = ("stationary", "walking", "driving", "train")
+TRANSPORT_MODES = ("stationary", "waiting", "walking", "driving", "train")
 
 
 @dataclass
@@ -25,6 +25,7 @@ class ModeScores:
     """
 
     stationary: float = 0.0
+    waiting: float = 0.0
     walking: float = 0.0
     driving: float = 0.0
     train: float = 0.0
@@ -33,6 +34,7 @@ class ModeScores:
         """Return the mode with the highest score."""
         scores = {
             "stationary": self.stationary,
+            "waiting": self.waiting,
             "walking": self.walking,
             "driving": self.driving,
             "train": self.train,
@@ -42,6 +44,7 @@ class ModeScores:
     def as_dict(self) -> dict[str, float]:
         return {
             "stationary": self.stationary,
+            "waiting": self.waiting,
             "walking": self.walking,
             "driving": self.driving,
             "train": self.train,
@@ -50,6 +53,7 @@ class ModeScores:
     def __add__(self, other: ModeScores) -> ModeScores:
         return ModeScores(
             stationary=self.stationary + other.stationary,
+            waiting=self.waiting + other.waiting,
             walking=self.walking + other.walking,
             driving=self.driving + other.driving,
             train=self.train + other.train,
@@ -58,6 +62,7 @@ class ModeScores:
     def scale(self, factor: float) -> ModeScores:
         return ModeScores(
             stationary=self.stationary * factor,
+            waiting=self.waiting * factor,
             walking=self.walking * factor,
             driving=self.driving * factor,
             train=self.train * factor,

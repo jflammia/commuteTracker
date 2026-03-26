@@ -28,7 +28,7 @@ from src.processing.classifiers.base import ModeScores
 
 logger = logging.getLogger(__name__)
 
-TRANSPORT_MODES = ["stationary", "walking", "driving", "train"]
+TRANSPORT_MODES = ["stationary", "waiting", "walking", "driving", "train"]
 
 
 @dataclass

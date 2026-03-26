@@ -73,12 +73,23 @@ Each classifier returns one `ModeScores` per GPS point:
 @dataclass
 class ModeScores:
     stationary: float = 0.0
+    waiting: float = 0.0
     walking: float = 0.0
     driving: float = 0.0
     train: float = 0.0
 ```
 
 Scores are non-negative. They don't need to sum to 1 — the ensemble scales by weight and picks the winner by total score.
+
+### Waiting mode detection
+
+`waiting` is a context-dependent mode that cannot be detected by any single classifier — it requires knowledge of surrounding segments. It is detected as a **post-classification pass** in the segmenter, after the ensemble has classified all points and segments have been assigned:
+
+- A **stationary** segment between two **different** moving modes (e.g., driving → stationary → train) is reclassified as **waiting** — this represents a transfer between transport modes (e.g., parking and walking to the platform).
+- A **stationary** segment at the **start or end** of a commute, adjacent to a moving mode, is reclassified as **waiting** — this represents waiting for the first/last leg (e.g., standing on the platform before the train arrives).
+- A **stationary** segment between the **same** moving mode (e.g., driving → stationary → driving) is kept as stationary — this represents a traffic stop, red light, etc.
+
+This design means classifiers never need to produce `waiting` scores. The `waiting` field exists in `ModeScores` for completeness and for future ML models that may learn to predict waiting directly.
 
 ### Waypoint boundaries
 

@@ -189,9 +189,86 @@ def segment_commute(
         modes, segment_ids, time_deltas, waypoint_boundaries
     )
 
+    # Detect waiting: stationary segments between different moving modes
+    modes, segment_ids = _detect_waiting(modes, segment_ids)
+
     df = df.with_columns(
         pl.Series("transport_mode", modes),
         pl.Series("segment_id", segment_ids),
     )
 
     return df
+
+
+MOVING_MODES = {"walking", "driving", "train"}
+
+
+def _detect_waiting(
+    modes: list[str],
+    segment_ids: list[int],
+) -> tuple[list[str], list[int]]:
+    """Reclassify stationary segments as 'waiting' when they represent transfers.
+
+    A stationary segment is reclassified as waiting when:
+    1. It sits between two segments of different moving modes
+       (e.g., driving -> stationary -> train = driving -> waiting -> train)
+    2. It is the first or last segment and adjacent to a moving mode
+       (e.g., stationary -> train = waiting -> train, represents platform wait)
+
+    Stationary segments between the same moving mode are kept as-is
+    (e.g., driving -> stationary -> driving = traffic stop, not a transfer).
+    """
+    if not modes:
+        return modes, segment_ids
+
+    # Build segment summary: [(mode, start_idx, end_idx), ...]
+    segments: list[tuple[str, int, int]] = []
+    current_mode = modes[0]
+    current_start = 0
+    for i in range(1, len(modes)):
+        if segment_ids[i] != segment_ids[i - 1]:
+            segments.append((current_mode, current_start, i - 1))
+            current_mode = modes[i]
+            current_start = i
+    segments.append((current_mode, current_start, len(modes) - 1))
+
+    # Scan for stationary segments that should become waiting
+    new_modes = list(modes)
+    for idx, (mode, start, end) in enumerate(segments):
+        if mode != "stationary":
+            continue
+
+        prev_moving = None
+        next_moving = None
+
+        # Look backward for nearest moving mode
+        for j in range(idx - 1, -1, -1):
+            if segments[j][0] in MOVING_MODES:
+                prev_moving = segments[j][0]
+                break
+
+        # Look forward for nearest moving mode
+        for j in range(idx + 1, len(segments)):
+            if segments[j][0] in MOVING_MODES:
+                next_moving = segments[j][0]
+                break
+
+        # Reclassify as waiting if between different moving modes,
+        # or at the start/end of a commute adjacent to a moving mode
+        is_transfer = (
+            prev_moving is not None
+            and next_moving is not None
+            and prev_moving != next_moving
+        )
+        is_edge_wait = (
+            (prev_moving is None and next_moving is not None)
+            or (prev_moving is not None and next_moving is None)
+        )
+
+        if is_transfer or is_edge_wait:
+            for i in range(start, end + 1):
+                new_modes[i] = "waiting"
+
+    # Re-assign segment IDs since modes changed
+    new_ids = _assign_segment_ids(new_modes)
+    return new_modes, new_ids

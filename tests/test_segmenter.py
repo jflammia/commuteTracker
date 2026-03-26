@@ -8,6 +8,7 @@ from src.processing.segmenter import (
     _smooth_modes,
     _assign_segment_ids,
     _merge_short_segments,
+    _detect_waiting,
 )
 
 
@@ -93,8 +94,9 @@ def test_segment_commute_classifies_modes():
     })
     result = segment_commute(df)
     modes = result["transport_mode"].to_list()
-    # First points should be stationary, last should be train
-    assert modes[0] == "stationary"
+    # First points should be waiting (stationary at start, adjacent to moving mode)
+    # or stationary; last should be train
+    assert modes[0] in ("stationary", "waiting")
     assert modes[-1] == "train"
 
 
@@ -104,3 +106,75 @@ def test_segment_commute_empty():
     assert "transport_mode" in result.columns
     assert "segment_id" in result.columns
     assert result.is_empty()
+
+
+# --- _detect_waiting tests ---
+
+
+def test_detect_waiting_between_different_moving_modes():
+    """Stationary between driving and train should become waiting."""
+    modes = ["driving"] * 5 + ["stationary"] * 3 + ["train"] * 5
+    segment_ids = [0] * 5 + [1] * 3 + [2] * 5
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    # The stationary segment should now be waiting
+    assert new_modes[5] == "waiting"
+    assert new_modes[7] == "waiting"
+    # driving and train should be unchanged
+    assert new_modes[0] == "driving"
+    assert new_modes[-1] == "train"
+
+
+def test_detect_waiting_between_same_moving_modes():
+    """Stationary between two driving segments should stay stationary (traffic stop)."""
+    modes = ["driving"] * 5 + ["stationary"] * 3 + ["driving"] * 5
+    segment_ids = [0] * 5 + [1] * 3 + [2] * 5
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    # Should remain stationary, not become waiting
+    assert new_modes[5] == "stationary"
+    assert new_modes[7] == "stationary"
+
+
+def test_detect_waiting_at_commute_start():
+    """Stationary at start of commute before a moving mode should become waiting."""
+    modes = ["stationary"] * 3 + ["train"] * 5
+    segment_ids = [0] * 3 + [1] * 5
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    assert new_modes[0] == "waiting"
+    assert new_modes[2] == "waiting"
+    assert new_modes[3] == "train"
+
+
+def test_detect_waiting_at_commute_end():
+    """Stationary at end of commute after a moving mode should become waiting."""
+    modes = ["walking"] * 5 + ["stationary"] * 3
+    segment_ids = [0] * 5 + [1] * 3
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    assert new_modes[5] == "waiting"
+    assert new_modes[7] == "waiting"
+    assert new_modes[0] == "walking"
+
+
+def test_detect_waiting_empty():
+    """Empty input should return empty."""
+    modes, ids = _detect_waiting([], [])
+    assert modes == []
+    assert ids == []
+
+
+def test_detect_waiting_no_stationary():
+    """No stationary segments means nothing to reclassify."""
+    modes = ["walking"] * 5 + ["driving"] * 5
+    segment_ids = [0] * 5 + [1] * 5
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    assert "waiting" not in new_modes
+
+
+def test_detect_waiting_reassigns_segment_ids():
+    """Segment IDs should be recalculated after waiting reclassification."""
+    modes = ["driving"] * 3 + ["stationary"] * 2 + ["train"] * 3
+    segment_ids = [0] * 3 + [1] * 2 + [2] * 3
+    new_modes, new_ids = _detect_waiting(modes, segment_ids)
+    # After reclassification: driving, waiting, train = 3 segments
+    assert new_ids[0] == 0  # driving
+    assert new_ids[3] == 1  # waiting
+    assert new_ids[5] == 2  # train

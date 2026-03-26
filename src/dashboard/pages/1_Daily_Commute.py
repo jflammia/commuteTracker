@@ -66,7 +66,8 @@ if "lat" in day_df.columns and "lon" in day_df.columns:
         "walking": "#2ecc71",
         "driving": "#3498db",
         "train": "#e74c3c",
-        "stationary": "#95a5a6",
+        "waiting": "#f39c12",
+    "stationary": "#95a5a6",
     }
 
     if has_commutes:
@@ -157,8 +158,8 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
                 color=alt.Color(
                     "transport_mode:N",
                     scale=alt.Scale(
-                        domain=["walking", "driving", "train", "stationary"],
-                        range=["#2ecc71", "#3498db", "#e74c3c", "#95a5a6"],
+                        domain=["walking", "driving", "train", "waiting", "stationary"],
+                        range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                     ),
                     legend=alt.Legend(title="Mode"),
                 ),

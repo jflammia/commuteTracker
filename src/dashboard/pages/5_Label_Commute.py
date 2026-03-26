@@ -27,11 +27,12 @@ from src.storage.database import Database
 from src.storage.derived_store import DerivedStore
 from src.storage.label_store import LabelStore
 
-TRANSPORT_MODES = ["stationary", "walking", "driving", "train"]
+TRANSPORT_MODES = ["stationary", "waiting", "walking", "driving", "train"]
 MODE_COLORS = {
     "walking": "#2ecc71",
     "driving": "#3498db",
     "train": "#e74c3c",
+    "waiting": "#f39c12",
     "stationary": "#95a5a6",
 }
 
