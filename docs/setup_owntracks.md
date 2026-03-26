@@ -68,12 +68,19 @@ ignoreInaccurateLocations: 50 # Drop fixes worse than 50m accuracy
 
 ---
 
-## Data Queuing & Durability
+## Data Queuing & Durability (from source code analysis)
 
-- **Server unreachable**: OwnTracks queues messages on-device and retries on next publish
-- **Queue is in-memory only**: If you force-quit the app or it crashes, queued messages are LOST
-- **Changing modes or endpoints clears the queue**
-- **Recommendation**: Keep the receiver server running reliably to minimize queued messages
+**Good news**: In HTTP mode, the queue is **CoreData-backed (disk-persisted)**, not in-memory
+as the documentation suggests. Messages survive app restarts and crashes.
+
+- **Server unreachable**: Messages are queued in CoreData and retried with exponential backoff
+  (1s, 2s, 4s... up to 64s between retries)
+- **Queue limits**: Max 100,000 messages or 100MB. Oldest messages dropped if exceeded.
+- **HTTP 4xx errors**: Messages are **discarded** (treated as permanent failure). Our receiver
+  must return 2xx for all valid payloads, even if processing fails.
+- **HTTP 5xx / network errors**: Messages are preserved and retried.
+- **Recommendation**: Keep the receiver server running and always return 200. Never return 4xx
+  for valid location payloads.
 
 ---
 
@@ -158,7 +165,7 @@ The `t` field in each location message indicates why it was published:
 - App POSTs JSON to configured URL with Content-Type: application/json
 - Headers include `X-Limit-U` (username) and `X-Limit-D` (device name)
 - Server should return 2xx with empty JSON array `[]` or array of command objects
-- If server is unreachable, messages are queued (in-memory) for later delivery
+- If server is unreachable, messages are queued in CoreData (disk-persisted) and retried
 - Authentication via HTTP Basic (user:password in URL)
 - TLS strongly recommended
 
@@ -180,13 +187,18 @@ drops below 20%. Plugging in the charger reverts to Move Mode automatically.
 
 ---
 
-## Data Loss Risks
+## Data Loss Risks (verified from source code)
 
-1. **Force-quitting the app** clears in-memory queue of unsent messages
-2. **App crashes** can reset the queue
-3. **Changing modes** clears queued messages
-4. **Changing endpoints** clears queued messages
-5. **iOS killing the app** in extreme memory pressure
+In HTTP mode, the queue is CoreData-persisted, so the risks are less severe than
+the documentation suggests. However:
 
-**Mitigation**: Keep receiver server running. Don't force-quit OwnTracks. Don't
-change modes/endpoints while offline.
+1. **HTTP 4xx from receiver** - messages are permanently discarded (not retried).
+   Our receiver MUST always return 2xx.
+2. **Queue overflow** - if >100K messages or >100MB queue, oldest are dropped.
+   This would require ~12 days of offline 10-second tracking.
+3. **Changing endpoints** may clear the queue (needs verification)
+4. **Location filtering** - the app silently drops locations with identical/older
+   timestamps, or with 0.0,0.0 coordinates
+
+**Mitigation**: Keep receiver running and always returning 200. The CoreData queue
+provides much better durability than documented.
