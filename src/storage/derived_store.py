@@ -22,11 +22,18 @@ class DerivedStore:
     def _parquet_glob(self) -> str:
         return str(self.derived_dir / "**" / "*.parquet")
 
+    def _has_parquet_files(self) -> bool:
+        """Check if any Parquet files exist in the derived directory."""
+        return any(self.derived_dir.rglob("*.parquet"))
+
     def query(self, sql: str) -> pl.DataFrame:
         """Run a SQL query over all derived Parquet files.
 
         Use 'commute_data' as the table name in your query.
+        Returns an empty DataFrame if no Parquet files exist.
         """
+        if not self._has_parquet_files():
+            return pl.DataFrame()
         glob = self._parquet_glob()
         full_sql = f"WITH commute_data AS (SELECT * FROM read_parquet('{glob}', union_by_name=true)) {sql}"
         return self._conn.execute(full_sql).pl()

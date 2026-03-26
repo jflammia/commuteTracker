@@ -3,7 +3,11 @@
 Accepts location data from OwnTracks iOS app, writes to database (SQLite/PostgreSQL),
 periodically exports to S3 as JSONL, and optionally forwards to OwnTracks Recorder.
 
-CRITICAL: Always return 200. OwnTracks permanently discards data on 4xx responses.
+Also serves:
+- REST API at /api/v1/* for programmatic access
+- MCP server at /mcp for LLM integration (Streamable HTTP)
+
+CRITICAL: Always return 200 on /pub. OwnTracks permanently discards data on 4xx responses.
 """
 
 import asyncio
@@ -14,6 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
+from starlette.routing import Mount
 
 from src.config import (
     DATABASE_URL,
@@ -95,6 +100,28 @@ async def lifespan(app: FastAPI):
         logger.info(f"Recorder passthrough enabled: {RECORDER_URL}")
     else:
         logger.info("Recorder passthrough disabled (RECORDER_URL not set)")
+
+    # Initialize REST API service
+    from src.api.routes import router as api_router, set_service
+    from src.api.service import CommuteService
+
+    service = CommuteService(db=db)
+    set_service(service)
+    app.include_router(api_router)
+    logger.info("REST API mounted at /api/v1")
+
+    # Mount MCP server
+    try:
+        from src.mcp_server import mcp as mcp_server, set_service as set_mcp_service
+        set_mcp_service(service)
+        app.routes.append(
+            Mount("/mcp", app=mcp_server.streamable_http_app())
+        )
+        logger.info("MCP server mounted at /mcp")
+    except ImportError:
+        logger.warning("MCP server not available (mcp package not installed)")
+    except Exception:
+        logger.exception("Failed to mount MCP server")
 
     yield
 
