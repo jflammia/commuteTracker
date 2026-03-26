@@ -43,8 +43,6 @@ services:
       receiver:
         condition: service_healthy
     restart: unless-stopped
-    profiles:
-      - dashboard
 
 volumes:
   commute-data:
