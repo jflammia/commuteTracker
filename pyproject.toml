@@ -18,11 +18,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.4",
+]
 dev = [
     "jupyter",
     "matplotlib",
     "pytest",
     "ruff",
+    "scikit-learn>=1.4",
 ]
 
 [build-system]

@@ -27,11 +27,19 @@ from src.processing.segmenter import segment_commute
 logger = logging.getLogger(__name__)
 
 
-def process_locations(df: pl.DataFrame) -> pl.DataFrame:
+def process_locations(
+    df: pl.DataFrame,
+    label_corrections: dict[tuple[str, int], str] | None = None,
+) -> pl.DataFrame:
     """Run the full processing pipeline on a DataFrame of raw locations.
 
     Input: raw location records with at minimum lat, lon, tst columns.
     Output: enriched DataFrame with speed, distance, commute IDs, segments.
+
+    Args:
+        df: Raw location DataFrame.
+        label_corrections: Optional map of (commute_id, segment_id) -> corrected_mode.
+            When provided, overrides classifier output for matching segments.
     """
     # Filter to location messages only
     if "_type" in df.columns:
@@ -65,6 +73,22 @@ def process_locations(df: pl.DataFrame) -> pl.DataFrame:
         for cid in commute_df["commute_id"].unique().to_list():
             one_commute = commute_df.filter(pl.col("commute_id") == cid)
             one_commute = segment_commute(one_commute)
+
+            # Apply label corrections if available
+            if label_corrections:
+                modes = one_commute["transport_mode"].to_list()
+                seg_ids = one_commute["segment_id"].to_list()
+                changed = False
+                for i, (mode, sid) in enumerate(zip(modes, seg_ids)):
+                    corrected = label_corrections.get((cid, sid))
+                    if corrected and corrected != mode:
+                        modes[i] = corrected
+                        changed = True
+                if changed:
+                    one_commute = one_commute.with_columns(
+                        pl.Series("transport_mode", modes),
+                    )
+
             segmented_parts.append(one_commute)
 
         segmented_commutes = pl.concat(segmented_parts)
@@ -130,7 +154,6 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
         records = query.all()
         if not records:
             return results
-            return results
 
         rows = []
         for r in records:
@@ -149,8 +172,13 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
         logger.warning(f"Missing required columns: {required - set(df.columns)}")
         return results
 
+    # Load label corrections from the same database
+    from src.storage.label_store import LabelStore
+    label_store = LabelStore(db)
+    corrections = label_store.get_corrections_map() or None
+
     # Process
-    df = process_locations(df)
+    df = process_locations(df, label_corrections=corrections)
 
     # Count commutes found
     if "commute_id" in df.columns:
