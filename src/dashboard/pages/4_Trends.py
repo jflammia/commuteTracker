@@ -1,22 +1,15 @@
 """Trends & Patterns: weekly/monthly aggregates, rolling averages, mode split."""
 
-import sys
-from pathlib import Path
-
 import streamlit as st
 import polars as pl
 import altair as alt
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.storage.derived_store import DerivedStore
+from src.dashboard.api_client import get_commutes, get_segments, get_stats
 
 st.title("Trends & Patterns")
 st.markdown("Long-term view of your commute: how are things changing over weeks and months?")
 
-store = DerivedStore()
-commutes = store.get_commutes()
+commutes = get_commutes()
 
 if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
@@ -116,7 +109,7 @@ st.markdown("How much of each commute is spent on each transport mode?")
 # Get segment data for all commutes
 all_segments = []
 for cid in commutes["commute_id"].to_list():
-    segs = store.get_segments(cid)
+    segs = get_segments(cid)
     if not segs.is_empty():
         segs = segs.with_columns(
             pl.lit(cid).alias("commute_id"),
@@ -214,6 +207,6 @@ if not dow.is_empty():
 
 # --- Overall Stats ---
 st.subheader("Overall Statistics")
-stats = store.get_commute_stats()
+stats = get_stats()
 if not stats.is_empty():
     st.dataframe(stats.to_pandas(), use_container_width=True, hide_index=True)

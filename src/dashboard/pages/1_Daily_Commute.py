@@ -1,20 +1,13 @@
 """Daily Commute view: map, segment breakdown, speed timeline for a single day."""
 
-import sys
-from pathlib import Path
-
 import streamlit as st
 import polars as pl
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.storage.derived_store import DerivedStore
+from src.dashboard.api_client import list_dates, get_daily_summary, get_segments
 
 st.title("Daily Commute")
 
-store = DerivedStore()
-dates = store.list_dates()
+dates = list_dates()
 
 if not dates:
     st.warning("No derived data found. Run the processing pipeline first.")
@@ -22,7 +15,7 @@ if not dates:
 
 selected_date = st.sidebar.selectbox("Select date", dates, index=len(dates) - 1)
 
-day_df = store.get_daily_summary(selected_date)
+day_df = get_daily_summary(selected_date)
 
 if day_df.is_empty():
     st.info(f"No data for {selected_date}.")
@@ -67,7 +60,7 @@ if "lat" in day_df.columns and "lon" in day_df.columns:
         "driving": "#3498db",
         "train": "#e74c3c",
         "waiting": "#f39c12",
-    "stationary": "#95a5a6",
+        "stationary": "#95a5a6",
     }
 
     if has_commutes:
@@ -127,7 +120,7 @@ if has_commutes:
     commute_df = day_df.filter(pl.col("commute_id").is_not_null())
     for cid in sorted(commute_df["commute_id"].unique().to_list()):
         st.markdown(f"**{cid}**")
-        segments = store.get_segments(cid)
+        segments = get_segments(cid)
         if not segments.is_empty():
             st.dataframe(
                 segments.to_pandas(),

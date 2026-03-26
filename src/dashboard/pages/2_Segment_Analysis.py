@@ -1,22 +1,15 @@
 """Segment Analysis: track how each leg of your commute performs over time."""
 
-import sys
-from pathlib import Path
-
 import streamlit as st
 import polars as pl
 import altair as alt
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.storage.derived_store import DerivedStore
+from src.dashboard.api_client import get_commutes, get_segments
 
 st.title("Segment Analysis")
 st.markdown("How does each leg of your commute behave over time? Which segments are most variable?")
 
-store = DerivedStore()
-commutes = store.get_commutes()
+commutes = get_commutes()
 
 if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
@@ -25,7 +18,7 @@ if commutes.is_empty():
 # --- Build per-segment history across all commutes ---
 all_segments = []
 for cid in commutes["commute_id"].to_list():
-    segs = store.get_segments(cid)
+    segs = get_segments(cid)
     if not segs.is_empty():
         segs = segs.with_columns(pl.lit(cid).alias("commute_id"))
         all_segments.append(segs)

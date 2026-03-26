@@ -3,29 +3,29 @@
 Allows users to:
 1. Select a commute and view its segments on a map and timeline
 2. Correct misclassified segments via dropdown
-3. Split segments at arbitrary points (mark new boundaries)
-4. Add notes explaining corrections
-5. View existing labels and their history
+3. Add notes explaining corrections
+4. View existing labels and their history
 
-All corrections persist via LabelStore for future re-processing and ML training.
+All corrections persist via the API for future re-processing and ML training.
 """
 
-import sys
-from pathlib import Path
+import json
 
 import streamlit as st
 import polars as pl
 import altair as alt
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-import json
-
-from src.config import DATABASE_URL
-from src.storage.database import Database
-from src.storage.derived_store import DerivedStore
-from src.storage.label_store import LabelStore
+from src.dashboard.api_client import (
+    get_commutes,
+    get_segments,
+    get_commute_points,
+    get_labels,
+    get_corrections_map,
+    add_label,
+    add_labels_bulk,
+    label_count,
+    export_labels,
+)
 
 TRANSPORT_MODES = ["stationary", "waiting", "walking", "driving", "train"]
 MODE_COLORS = {
@@ -42,11 +42,7 @@ st.markdown(
     "Your corrections improve future classification accuracy and serve as ML training data."
 )
 
-store = DerivedStore()
-db = Database(DATABASE_URL)
-db.create_tables()
-label_store = LabelStore(db)
-commutes = store.get_commutes()
+commutes = get_commutes()
 
 if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
@@ -63,25 +59,31 @@ selected_commute = st.sidebar.selectbox(
 )
 
 # Show existing label count for this commute
-existing_labels = label_store.get_labels(selected_commute)
+existing_labels = get_labels(selected_commute)
 if existing_labels:
     st.sidebar.info(f"{len(existing_labels)} existing correction(s) for this commute")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Label Statistics**")
-st.sidebar.metric("Total Labels", label_store.label_count())
+st.sidebar.metric("Total Labels", label_count())
 
 # ── Load data ───────────────────────────────────────────────────────────────
 
-segments = store.get_segments(selected_commute)
-points = store.get_commute_points(selected_commute)
+segments = get_segments(selected_commute)
+points = get_commute_points(selected_commute)
 
 if points.is_empty():
     st.info("No point data for this commute.")
     st.stop()
 
 # Build corrections lookup for display
-corrections = label_store.get_corrections_map()
+# API returns {"commute_id:segment_id": "mode"}, convert to {(cid, sid): mode}
+corrections_raw = get_corrections_map()
+corrections = {}
+for key, mode in corrections_raw.items():
+    parts = key.rsplit(":", 1)
+    if len(parts) == 2:
+        corrections[(parts[0], int(parts[1]))] = mode
 
 # ── Map view ────────────────────────────────────────────────────────────────
 
@@ -289,7 +291,7 @@ for row_idx in range(len(segments)):
     with col_action:
         if new_mode != original_mode:
             if st.button("Save", key=f"save_{selected_commute}_{sid}", type="primary"):
-                label_store.add_label(
+                add_label(
                     commute_id=selected_commute,
                     segment_id=sid,
                     original_mode=original_mode,
@@ -300,7 +302,7 @@ for row_idx in range(len(segments)):
                 changed = True
         elif existing_correction:
             st.markdown(
-                f"<span style='color:#e67e22;font-size:12px;'>corrected</span>",
+                "<span style='color:#e67e22;font-size:12px;'>corrected</span>",
                 unsafe_allow_html=True,
             )
 
@@ -319,35 +321,39 @@ col_bulk1, col_bulk2 = st.columns(2)
 with col_bulk1:
     st.subheader("Quick Actions")
     if st.button("Mark all segments as correct"):
+        bulk_labels = []
         for row_idx in range(len(segments)):
             seg = segments.row(row_idx, named=True)
             sid = seg["segment_id"]
             mode = seg["transport_mode"]
             if (selected_commute, sid) not in corrections:
-                label_store.add_label(
-                    commute_id=selected_commute,
-                    segment_id=sid,
-                    original_mode=mode,
-                    corrected_mode=mode,
-                    notes="confirmed correct",
-                )
+                bulk_labels.append({
+                    "commute_id": selected_commute,
+                    "segment_id": sid,
+                    "original_mode": mode,
+                    "corrected_mode": mode,
+                    "notes": "confirmed correct",
+                })
+        if bulk_labels:
+            add_labels_bulk(bulk_labels)
         st.toast("All segments marked as correct")
         st.rerun()
 
 with col_bulk2:
     st.subheader("Label Summary")
-    labels = label_store.get_labels(selected_commute)
+    labels = get_labels(selected_commute)
     if labels:
         summary_data = []
         for lbl in labels:
-            was_changed = lbl.original_mode != lbl.corrected_mode
+            was_changed = lbl["original_mode"] != lbl["corrected_mode"]
+            labeled_at = lbl.get("labeled_at", "")
             summary_data.append({
-                "Segment": lbl.segment_id,
-                "Original": lbl.original_mode,
-                "Corrected": lbl.corrected_mode,
+                "Segment": lbl["segment_id"],
+                "Original": lbl["original_mode"],
+                "Corrected": lbl["corrected_mode"],
                 "Changed": "yes" if was_changed else "confirmed",
-                "Notes": lbl.notes,
-                "Labeled": lbl.labeled_at[:19],
+                "Notes": lbl.get("notes", ""),
+                "Labeled": labeled_at[:19] if labeled_at else "",
             })
         st.dataframe(
             summary_data,
@@ -360,13 +366,12 @@ with col_bulk2:
 # ── All labels export ───────────────────────────────────────────────────────
 
 with st.expander("All Labels (all commutes)"):
-    all_labels = label_store.get_labels()
+    all_labels = get_labels()
     if all_labels:
-        all_data = [l.to_dict() for l in all_labels]
-        st.dataframe(all_data, use_container_width=True, hide_index=True)
+        st.dataframe(all_labels, use_container_width=True, hide_index=True)
         st.download_button(
             "Download labels as JSON",
-            data=json.dumps(label_store.export_json(), indent=2),
+            data=json.dumps(export_labels(), indent=2),
             file_name="commute_labels.json",
             mime="application/json",
         )

@@ -1,16 +1,10 @@
 """Departure Time Optimizer: find the best time to leave for the shortest commute."""
 
-import sys
-from pathlib import Path
-
 import streamlit as st
 import polars as pl
 import altair as alt
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.storage.derived_store import DerivedStore
+from src.dashboard.api_client import get_commutes
 
 st.title("Departure Time Optimizer")
 st.markdown(
@@ -18,8 +12,7 @@ st.markdown(
     "Find your optimal window to leave."
 )
 
-store = DerivedStore()
-commutes = store.get_commutes()
+commutes = get_commutes()
 
 if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
