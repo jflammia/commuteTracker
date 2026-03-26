@@ -191,6 +191,66 @@ def export_labels():
     return get_service().export_labels()
 
 
+@router.get("/labels/analyze/{commute_id}/{segment_id}")
+def analyze_segment(commute_id: str, segment_id: int):
+    """Deep analysis of a single segment with mismatch detection.
+
+    Low-level labeling: returns speed stats, context, and whether
+    the classification looks correct. Use before correcting a segment.
+    """
+    result = get_service().analyze_segment(commute_id, segment_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.get("/labels/review/{commute_id}")
+def review_commute(commute_id: str):
+    """Review all segments in a commute and flag suspicious classifications.
+
+    Mid-level labeling: checks every segment's speed profile and returns
+    flagged segments with suggested corrections sorted by confidence.
+    """
+    result = get_service().review_commute_segments(commute_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.get("/labels/review")
+def review_recent(
+    n: int = Query(default=5, ge=1, le=50),
+    direction: str | None = Query(default=None),
+):
+    """Review recent commutes for systematic misclassification patterns.
+
+    High-level labeling: reviews last N commutes, finds patterns, and
+    returns batch corrections sorted by confidence.
+    """
+    result = get_service().review_recent_commutes(n=n, direction=direction)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+class ApplyCorrectionsRequest(BaseModel):
+    corrections: list[dict]
+    min_confidence: float = 0.7
+
+
+@router.post("/labels/apply")
+def apply_corrections(req: ApplyCorrectionsRequest):
+    """Apply suggested corrections from a review, filtered by confidence.
+
+    Takes the suggested_corrections from review endpoints and applies
+    them as labels. Only corrections >= min_confidence are applied.
+    """
+    return get_service().apply_suggested_corrections(
+        corrections=req.corrections,
+        min_confidence=req.min_confidence,
+    )
+
+
 # ── Processing ────────────────────────────────────────────────────────────────
 
 

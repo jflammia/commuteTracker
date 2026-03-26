@@ -178,6 +178,31 @@ def label_count() -> int:
     return health.get("label_count", 0)
 
 
+# ── Label Intelligence ───────────────────────────────────────────────────────
+
+def analyze_segment(commute_id: str, segment_id: int) -> dict:
+    """Deep analysis of a single segment with mismatch detection."""
+    return _get(f"/labels/analyze/{commute_id}/{segment_id}")
+
+
+def review_commute(commute_id: str) -> dict:
+    """Review all segments in a commute and flag suspicious classifications."""
+    return _get(f"/labels/review/{commute_id}")
+
+
+def review_recent(n: int = 5, direction: str | None = None) -> dict:
+    """Review recent commutes for systematic misclassification patterns."""
+    return _get("/labels/review", n=n, direction=direction)
+
+
+def apply_corrections(corrections: list[dict], min_confidence: float = 0.7) -> dict:
+    """Apply suggested corrections from a review."""
+    return _post("/labels/apply", json={
+        "corrections": corrections,
+        "min_confidence": min_confidence,
+    })
+
+
 # ── Processing ────────────────────────────────────────────────────────────────
 
 def rebuild_derived(

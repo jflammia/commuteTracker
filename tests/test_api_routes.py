@@ -148,3 +148,58 @@ def test_api_bulk_labels(client):
     corrections = resp.json()
     assert corrections["c1:0"] == "train"
     assert corrections["c1:1"] == "waiting"
+
+
+# ── Label Intelligence Routes ────────────────────────────────────────────────
+
+
+def test_api_analyze_segment_404(client):
+    resp = client.get("/api/v1/labels/analyze/nonexistent/0")
+    assert resp.status_code == 404
+
+
+def test_api_review_commute_404(client):
+    resp = client.get("/api/v1/labels/review/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_api_review_recent_no_data(client):
+    resp = client.get("/api/v1/labels/review?n=5")
+    assert resp.status_code == 404
+
+
+def test_api_apply_corrections_empty(client):
+    resp = client.post("/api/v1/labels/apply", json={
+        "corrections": [],
+        "min_confidence": 0.7,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["applied_count"] == 0
+    assert data["skipped_count"] == 0
+
+
+def test_api_apply_corrections_with_threshold(client):
+    resp = client.post("/api/v1/labels/apply", json={
+        "corrections": [
+            {
+                "commute_id": "c1",
+                "segment_id": 0,
+                "original_mode": "driving",
+                "corrected_mode": "train",
+                "confidence": 0.9,
+            },
+            {
+                "commute_id": "c1",
+                "segment_id": 1,
+                "original_mode": "stationary",
+                "corrected_mode": "waiting",
+                "confidence": 0.4,
+            },
+        ],
+        "min_confidence": 0.7,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["applied_count"] == 1
+    assert data["skipped_count"] == 1

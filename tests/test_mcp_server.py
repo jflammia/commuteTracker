@@ -25,6 +25,10 @@ def test_mcp_has_tools():
         "rebuild_derived_data",
         "train_ml_model",
         "evaluate_classifier",
+        "analyze_segment",
+        "review_commute_labels",
+        "review_recent_labels",
+        "apply_label_corrections",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 

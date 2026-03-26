@@ -376,6 +376,125 @@ def train_ml_model(
 
 
 @mcp.tool()
+def analyze_segment(
+    commute_id: str,
+    segment_id: int,
+    ctx: Context,
+) -> str:
+    """Analyze a single segment's speed profile and detect classification mismatches.
+
+    LOW-LEVEL labeling: Use this when you want to deeply inspect one specific
+    segment before deciding whether to correct it. Returns speed statistics
+    (mean, median, max, min, std), duration, distance, neighboring segment
+    modes, and mismatch detection with a suggested correction and confidence.
+
+    Best for:
+    - Investigating a specific suspicious segment
+    - Understanding why a segment was classified a certain way
+    - Getting detailed evidence before making a correction
+
+    Args:
+        commute_id: The commute identifier (e.g. '2026-03-26_am_001')
+        segment_id: The segment number within the commute (0-indexed)
+    """
+    service = ctx.request_context.lifespan_context.service
+    result = service.analyze_segment(commute_id, segment_id)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def review_commute_labels(
+    commute_id: str,
+    ctx: Context,
+) -> str:
+    """Review all segments in a commute and flag suspicious classifications.
+
+    MID-LEVEL labeling: Use this to efficiently review an entire commute.
+    Checks every segment's speed profile against expected ranges and returns
+    flagged segments sorted by confidence of misclassification, along with
+    ready-to-apply suggested corrections.
+
+    Best for:
+    - Reviewing a specific commute after processing
+    - Finding all misclassifications in one commute at once
+    - Getting a list of corrections you can apply with apply_label_corrections
+
+    The response includes:
+    - all_segments: every segment with its analysis
+    - flagged_segments: only the suspicious ones, sorted by confidence
+    - suggested_corrections: ready to pass to apply_label_corrections
+    """
+    service = ctx.request_context.lifespan_context.service
+    result = service.review_commute_segments(commute_id)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def review_recent_labels(
+    ctx: Context,
+    n: int = 5,
+    direction: str | None = None,
+) -> str:
+    """Review recent commutes for systematic misclassification patterns.
+
+    HIGH-LEVEL labeling: Use this for batch review across multiple commutes.
+    Analyzes the last N commutes, aggregates mismatch patterns, and identifies
+    systematic issues (e.g., 'driving segments with >30 km/h are frequently
+    misclassified and should be train').
+
+    Best for:
+    - Initial quality audit after first processing real data
+    - Finding systematic classifier weaknesses
+    - Batch-correcting recurring misclassifications
+    - Preparing training data for ML model improvement
+
+    The response includes:
+    - commute_summaries: overview of each reviewed commute
+    - systematic_patterns: recurring misclassification types with counts
+    - suggested_corrections: ready to pass to apply_label_corrections
+
+    Args:
+        n: Number of recent commutes to review (default 5)
+        direction: Filter by commute direction (e.g. 'to_work', 'to_home')
+    """
+    service = ctx.request_context.lifespan_context.service
+    result = service.review_recent_commutes(n=n, direction=direction)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def apply_label_corrections(
+    corrections: list[dict],
+    ctx: Context,
+    min_confidence: float = 0.7,
+) -> str:
+    """Apply suggested corrections from a review, filtered by confidence threshold.
+
+    Takes the suggested_corrections output from review_commute_labels or
+    review_recent_labels and applies them as durable label corrections.
+    Only corrections with confidence >= min_confidence are applied.
+
+    Workflow:
+    1. Use review_commute_labels or review_recent_labels to get suggestions
+    2. Inspect the suggestions (or adjust min_confidence)
+    3. Call this tool with the suggestions to apply them
+
+    For maximum accuracy, use a high min_confidence (0.8-0.9).
+    For broader coverage, use a lower threshold (0.5-0.7).
+
+    Args:
+        corrections: List of correction dicts from a review's suggested_corrections
+        min_confidence: Minimum confidence to apply (0.0-1.0, default 0.7)
+    """
+    service = ctx.request_context.lifespan_context.service
+    result = service.apply_suggested_corrections(
+        corrections=corrections,
+        min_confidence=min_confidence,
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 def evaluate_classifier(ctx: Context) -> str:
     """Evaluate the automatic classifier against user-provided labels.
 

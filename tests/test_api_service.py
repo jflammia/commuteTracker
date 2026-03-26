@@ -142,3 +142,88 @@ def test_add_labels_bulk(service):
     # Verify they're persisted
     all_labels = service.list_labels()
     assert len(all_labels) == 2
+
+
+# ── Multi-Level Labeling Intelligence Tests ──────────────────────────────────
+
+
+def test_analyze_segment_no_commute(service):
+    result = service.analyze_segment("nonexistent", 0)
+    assert "error" in result
+
+
+def test_review_commute_no_segments(service):
+    result = service.review_commute_segments("nonexistent")
+    assert "error" in result
+
+
+def test_review_recent_no_commutes(service):
+    result = service.review_recent_commutes(n=5)
+    assert "error" in result
+
+
+def test_apply_corrections_empty(service):
+    result = service.apply_suggested_corrections([], min_confidence=0.5)
+    assert result["applied_count"] == 0
+    assert result["skipped_count"] == 0
+
+
+def test_apply_corrections_filters_by_confidence(service):
+    corrections = [
+        {
+            "commute_id": "c1",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+            "confidence": 0.9,
+            "notes": "high confidence",
+        },
+        {
+            "commute_id": "c1",
+            "segment_id": 1,
+            "original_mode": "stationary",
+            "corrected_mode": "waiting",
+            "confidence": 0.3,
+            "notes": "low confidence",
+        },
+    ]
+    result = service.apply_suggested_corrections(corrections, min_confidence=0.7)
+    assert result["applied_count"] == 1
+    assert result["skipped_count"] == 1
+    assert result["applied"][0]["corrected_mode"] == "train"
+    assert result["skipped"][0]["skip_reason"].startswith("confidence 0.3")
+
+
+def test_mode_mismatch_detection():
+    """Test the internal mismatch detection logic."""
+    from src.api.service import _detect_mode_mismatch
+
+    # Walking classified correctly
+    result = _detect_mode_mismatch("walking", 4.0, 6.0, 1.0, None, None)
+    assert result["mismatch"] is False
+
+    # Walking too fast — should suggest driving
+    result = _detect_mode_mismatch("walking", 15.0, 25.0, 5.0, None, None)
+    assert result["mismatch"] is True
+    assert result["suggested_mode"] == "driving"
+    assert result["confidence"] > 0.5
+
+    # Stationary between different moving modes — should be waiting
+    result = _detect_mode_mismatch("stationary", 0.5, 1.0, 0.2, "walking", "train")
+    assert result["mismatch"] is True
+    assert result["suggested_mode"] == "waiting"
+
+    # Driving with train-like speed
+    result = _detect_mode_mismatch("driving", 90.0, 120.0, 10.0, None, None)
+    assert result["mismatch"] is True
+    assert result["suggested_mode"] == "train"
+
+
+def test_suggest_mode():
+    """Test mode suggestion based on speed stats."""
+    from src.api.service import _suggest_mode
+
+    assert _suggest_mode(0.5, 0.8, 0.1) == "stationary"
+    assert _suggest_mode(4.0, 6.0, 1.0) == "walking"
+    assert _suggest_mode(15.0, 25.0, 5.0) == "driving"
+    assert _suggest_mode(80.0, 120.0, 10.0) == "train"
