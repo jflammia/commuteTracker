@@ -5,11 +5,22 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from src.receiver.app import app
+from src.storage.database import Database
 
 
 @pytest.fixture
-def client():
+def db(tmp_path):
+    db_path = tmp_path / "test.db"
+    database = Database(f"sqlite:///{db_path}")
+    database.create_tables()
+    return database
+
+
+@pytest.fixture
+def client(db, monkeypatch):
+    monkeypatch.setattr("src.receiver.app.db", db)
+    monkeypatch.setattr("src.receiver.app.RECORDER_URL", "")
+    from src.receiver.app import app
     return TestClient(app)
 
 
@@ -29,10 +40,7 @@ def sample_location():
     }
 
 
-def test_receive_location(client, sample_location, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.receiver.app.RAW_DATA_DIR", tmp_path)
-    monkeypatch.setattr("src.storage.raw_store.os.fsync", lambda fd: None)
-
+def test_receive_location(client, db, sample_location):
     resp = client.post(
         "/pub",
         json=sample_location,
@@ -41,36 +49,26 @@ def test_receive_location(client, sample_location, tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json() == []
+    assert db.count_records() == 1
 
-    # Verify data was written
-    jsonl_files = list(tmp_path.rglob("*.jsonl"))
-    assert len(jsonl_files) == 1
-
-    with open(jsonl_files[0]) as f:
-        record = json.loads(f.readline())
-    assert record["lat"] == 40.75
-    assert record["_type"] == "location"
-    assert record["_receiver_user"] == "testuser"
-    assert record["_receiver_device"] == "testdevice"
-    assert "received_at" in record
+    unsynced = db.get_unsynced_records()
+    payload = json.loads(unsynced[0].payload)
+    assert payload["lat"] == 40.75
+    assert payload["_type"] == "location"
+    assert payload["_receiver_user"] == "testuser"
+    assert payload["_receiver_device"] == "testdevice"
+    assert "received_at" in payload
 
 
-def test_receive_empty_body(client, monkeypatch, tmp_path):
-    monkeypatch.setattr("src.receiver.app.RAW_DATA_DIR", tmp_path)
-
+def test_receive_empty_body(client, db):
     resp = client.post("/pub", content=b"")
     assert resp.status_code == 200
     assert resp.json() == []
-
-    # No file should be written
-    jsonl_files = list(tmp_path.rglob("*.jsonl"))
-    assert len(jsonl_files) == 0
+    assert db.count_records() == 0
 
 
-def test_receive_invalid_json_still_200(client, monkeypatch, tmp_path):
+def test_receive_invalid_json_still_200(client, db):
     """OwnTracks data loss prevention: never return 4xx."""
-    monkeypatch.setattr("src.receiver.app.RAW_DATA_DIR", tmp_path)
-
     resp = client.post(
         "/pub",
         content=b"not valid json",
@@ -82,10 +80,7 @@ def test_receive_invalid_json_still_200(client, monkeypatch, tmp_path):
     assert resp.json() == []
 
 
-def test_receive_transition(client, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.receiver.app.RAW_DATA_DIR", tmp_path)
-    monkeypatch.setattr("src.storage.raw_store.os.fsync", lambda fd: None)
-
+def test_receive_transition(client, db):
     transition = {
         "_type": "transition",
         "event": "enter",
@@ -99,33 +94,43 @@ def test_receive_transition(client, tmp_path, monkeypatch):
 
     resp = client.post("/pub", json=transition)
     assert resp.status_code == 200
+    assert db.count_records() == 1
 
-    jsonl_files = list(tmp_path.rglob("*.jsonl"))
-    assert len(jsonl_files) == 1
-    with open(jsonl_files[0]) as f:
-        record = json.loads(f.readline())
-    assert record["_type"] == "transition"
-    assert record["event"] == "enter"
+    unsynced = db.get_unsynced_records()
+    payload = json.loads(unsynced[0].payload)
+    assert payload["_type"] == "transition"
+    assert payload["event"] == "enter"
 
 
-def test_health_endpoint(client):
+def test_health_endpoint(client, db, sample_location):
+    # Insert a record first
+    client.post("/pub", json=sample_location)
+
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert "raw_data_dir" in data
+    assert data["total_records"] == 1
+    assert data["unsynced_records"] == 1
+    assert "database" in data
     assert "s3_enabled" in data
+    assert "recorder_enabled" in data
 
 
-def test_default_headers_when_missing(client, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.receiver.app.RAW_DATA_DIR", tmp_path)
-    monkeypatch.setattr("src.storage.raw_store.os.fsync", lambda fd: None)
-
+def test_default_headers_when_missing(client, db):
     resp = client.post("/pub", json={"_type": "location", "lat": 40.0, "lon": -74.0, "tst": 1})
     assert resp.status_code == 200
 
-    jsonl_files = list(tmp_path.rglob("*.jsonl"))
-    with open(jsonl_files[0]) as f:
-        record = json.loads(f.readline())
-    assert record["_receiver_user"] == "unknown"
-    assert record["_receiver_device"] == "unknown"
+    unsynced = db.get_unsynced_records()
+    payload = json.loads(unsynced[0].payload)
+    assert payload["_receiver_user"] == "unknown"
+    assert payload["_receiver_device"] == "unknown"
+
+
+def test_multiple_locations(client, db, sample_location):
+    for i in range(10):
+        sample_location["tst"] = 1711440000 + i * 10
+        client.post("/pub", json=sample_location)
+
+    assert db.count_records() == 10
+    assert db.count_unsynced() == 10

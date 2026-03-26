@@ -1,17 +1,21 @@
-"""S3-compatible storage sync for raw JSONL files.
+"""S3-compatible storage sync: export database rows to JSONL and upload.
 
-Periodically uploads local JSONL files to S3-compatible storage (MinIO, AWS S3,
-Backblaze B2, etc.) for durable off-site backup. Local disk is the primary store;
-S3 is the durable copy.
+Periodically exports unsynced records from the database to JSONL files,
+uploads them to S3-compatible storage, marks records as synced, and
+optionally prunes old synced records from the database.
 
 Design:
-- Tracks last-modified times to only upload changed files
-- Mirrors local path structure in S3: raw/YYYY/MM/YYYY-MM-DD.jsonl
-- Gracefully degrades if S3 is unavailable (logs warning, keeps running)
+- Exports to JSONL grouped by date (one file per day)
+- Tracks sync status per-record in the database
+- Only prunes when S3 is configured and retention_days > 0
+- Gracefully degrades if S3 is unavailable
 """
 
+import json
 import logging
-import os
+import tempfile
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import boto3
@@ -23,51 +27,86 @@ logger = logging.getLogger(__name__)
 class S3Sync:
     def __init__(
         self,
-        local_dir: str | Path,
         bucket: str,
         endpoint_url: str = "",
         prefix: str = "raw",
     ):
-        self.local_dir = Path(local_dir)
         self.bucket = bucket
         self.prefix = prefix
-        self._last_synced: dict[str, float] = {}  # path -> mtime at last sync
 
-        session_kwargs = {}
         client_kwargs = {}
         if endpoint_url:
             client_kwargs["endpoint_url"] = endpoint_url
 
-        self._client = boto3.client("s3", **session_kwargs, **client_kwargs)
+        self._client = boto3.client("s3", **client_kwargs)
 
-    def _s3_key(self, local_path: Path) -> str:
-        """Convert local path to S3 key, preserving date structure."""
-        relative = local_path.relative_to(self.local_dir)
-        return f"{self.prefix}/{relative}"
+    def _s3_key(self, date: datetime) -> str:
+        """Generate S3 key for a given date's JSONL file."""
+        return f"{self.prefix}/{date.year}/{date.month:02d}/{date.year}-{date.month:02d}-{date.day:02d}.jsonl"
 
-    def sync(self) -> dict:
-        """Sync changed JSONL files to S3. Returns summary of actions."""
-        results = {"uploaded": [], "skipped": [], "errors": []}
+    def sync_from_db(self, db, retention_days: int = 0) -> dict:
+        """Export unsynced records from DB to S3 as JSONL, then optionally prune.
 
-        jsonl_files = sorted(self.local_dir.rglob("*.jsonl"))
-        for path in jsonl_files:
+        Args:
+            db: Database instance
+            retention_days: Days to keep synced records locally. 0 = no pruning.
+
+        Returns:
+            Summary dict with counts of uploaded, synced, pruned, errors.
+        """
+        results = {"uploaded": [], "synced": 0, "pruned": 0, "errors": []}
+
+        records = db.get_unsynced_records()
+        if not records:
+            return results
+
+        # Group records by date
+        by_date: dict[str, list] = defaultdict(list)
+        id_by_date: dict[str, list[int]] = defaultdict(list)
+        for r in records:
+            date_key = r.received_at.strftime("%Y-%m-%d")
+            by_date[date_key].append(r.payload)
+            id_by_date[date_key].append(r.id)
+
+        # Export and upload each day's data
+        for date_key, payloads in by_date.items():
             try:
-                mtime = path.stat().st_mtime
-                last = self._last_synced.get(str(path))
+                date = datetime.strptime(date_key, "%Y-%m-%d")
+                key = self._s3_key(date)
 
-                if last is not None and mtime <= last:
-                    results["skipped"].append(str(path))
-                    continue
+                # Build JSONL content
+                lines = []
+                for payload_str in payloads:
+                    lines.append(payload_str if payload_str.endswith("\n") else payload_str + "\n")
+                content = "".join(lines)
 
-                key = self._s3_key(path)
-                self._client.upload_file(str(path), self.bucket, key)
-                self._last_synced[str(path)] = mtime
+                # Upload. Use a temp file to handle large exports.
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=True) as tmp:
+                    tmp.write(content)
+                    tmp.flush()
+                    self._client.upload_file(tmp.name, self.bucket, key)
+
+                # Mark as synced
+                record_ids = id_by_date[date_key]
+                db.mark_synced(record_ids)
+                results["synced"] += len(record_ids)
                 results["uploaded"].append(key)
-                logger.info(f"Uploaded {key}")
+                logger.info(f"Uploaded {key} ({len(record_ids)} records)")
 
             except (BotoCoreError, ClientError) as e:
-                results["errors"].append({"path": str(path), "error": str(e)})
-                logger.warning(f"Failed to upload {path}: {e}")
+                results["errors"].append({"date": date_key, "error": str(e)})
+                logger.warning(f"Failed to upload {date_key}: {e}")
+
+        # Prune old synced records
+        if retention_days > 0 and results["synced"] > 0:
+            try:
+                pruned = db.prune_old_synced(retention_days)
+                results["pruned"] = pruned
+                if pruned:
+                    logger.info(f"Pruned {pruned} records older than {retention_days} days")
+            except Exception as e:
+                results["errors"].append({"prune_error": str(e)})
+                logger.warning(f"Prune failed: {e}")
 
         return results
 

@@ -40,15 +40,17 @@ New project in an empty repo. The goal is to collect GPS/time data during daily 
 | Layer | Tech | Why |
 |-------|------|-----|
 | Collection | **OwnTracks** (iOS) | Open source, background GPS, HTTP POST mode, queues on-device if server down. User has iPhone. |
-| Raw Storage | **JSONL files**, date-partitioned | Plain text = max durability, append-only, no binary corruption, schema-flexible |
+| Local Storage | **SQLAlchemy** (SQLite default, PostgreSQL optional) | WAL crash safety, queryable, backend-swappable via connection string |
+| Durable Archive | **S3-compatible storage** (boto3, JSONL export) | Portable, inspectable, works with any S3 provider |
 | Processing | **Python + Polars** | Fast, modern DataFrame library for time-series |
 | Analytics DB | **DuckDB** | Zero-infrastructure SQL over Parquet/JSON, perfect for local analytics |
 | Dashboard | **Streamlit** | Python-native, fast to build, interactive |
 | Exploration | **Jupyter notebooks** | Ad-hoc analysis and ML prototyping |
 | Maps | **Folium** | Interactive maps from Python |
-| Integrity | **SHA256 checksums** per day-file | Detect corruption |
 | Hosting | **Proxmox homelab** | User's existing infra; receiver runs as container |
-| Backup | **S3-compatible storage** (boto3, every 5 min) | Self-hosted or cloud; durable off-site copy of raw data |
+| Passthrough | **OwnTracks Recorder** (optional) | Web UI, reverse geocoding; fire-and-forget forward |
+
+See [ADR-001](decisions/adr-001-storage-architecture.md) for full storage architecture rationale.
 
 ---
 
