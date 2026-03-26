@@ -85,10 +85,17 @@ def process_locations(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def process_from_db(db, output_dir: str | Path | None = None) -> dict:
-    """Process all records from the database and write Parquet files.
+def process_from_db(db, output_dir: str | Path | None = None, filters: dict | None = None) -> dict:
+    """Process records from the database and write Parquet files.
 
     Groups by date and writes one Parquet file per day.
+
+    Args:
+        db: Database instance.
+        output_dir: Where to write Parquet files.
+        filters: Optional dict with keys: since, until (YYYY-MM-DD strings),
+                 user, device, msg_type.
+
     Returns summary of files written.
     """
     output_dir = Path(output_dir or DERIVED_DATA_DIR)
@@ -96,12 +103,33 @@ def process_from_db(db, output_dir: str | Path | None = None) -> dict:
 
     results = {"files_written": [], "total_records": 0, "commutes_found": 0}
 
-    # Load all records from DB
+    # Load records from DB with optional filtering
     with db.session() as session:
         from src.storage.database import LocationRecord
 
-        records = session.query(LocationRecord).order_by(LocationRecord.received_at).all()
+        query = session.query(LocationRecord).order_by(LocationRecord.received_at)
+
+        if filters:
+            from datetime import datetime, timezone
+
+            if "since" in filters:
+                since = datetime.strptime(filters["since"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                query = query.filter(LocationRecord.received_at >= since)
+            if "until" in filters:
+                until = datetime.strptime(filters["until"], "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59, tzinfo=timezone.utc
+                )
+                query = query.filter(LocationRecord.received_at <= until)
+            if "user" in filters:
+                query = query.filter(LocationRecord.user == filters["user"])
+            if "device" in filters:
+                query = query.filter(LocationRecord.device == filters["device"])
+            if "msg_type" in filters:
+                query = query.filter(LocationRecord.msg_type == filters["msg_type"])
+
+        records = query.all()
         if not records:
+            return results
             return results
 
         rows = []
