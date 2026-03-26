@@ -23,6 +23,18 @@
 
 Commute Tracker collects GPS data from your phone via [OwnTracks](https://owntracks.org/), automatically segments commutes into transport modes (walking, driving, train, waiting), and provides dashboards and analytics to optimize your daily travel. Raw data is immutable and everything else is re-derivable.
 
+<!-- Screenshots — replace these with your own once you have real data -->
+<!--
+<p align="center">
+  <img src="docs/screenshots/dashboard-map.png" alt="Dashboard map view" width="48%" />
+  &nbsp;
+  <img src="docs/screenshots/departure-optimizer.png" alt="Departure optimizer" width="48%" />
+</p>
+<p align="center">
+  <em>Left: Daily commute map with color-coded segments. Right: Departure time optimizer.</em>
+</p>
+-->
+
 **Key design principles:**
 - **Durability-first** — raw GPS data is append-only, backed up to S3, never modified
 - **AI-first** — native MCP server for LLM integration alongside REST API
