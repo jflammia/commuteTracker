@@ -8,6 +8,7 @@ Design principles:
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,8 @@ def append_record(base_dir: str | Path, record: dict) -> Path:
     line = json.dumps(record, separators=(",", ":")) + "\n"
     with open(path, "a") as f:
         f.write(line)
+        f.flush()
+        os.fsync(f.fileno())
 
     return path
 

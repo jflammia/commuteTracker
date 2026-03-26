@@ -47,8 +47,8 @@ New project in an empty repo. The goal is to collect GPS/time data during daily 
 | Exploration | **Jupyter notebooks** | Ad-hoc analysis and ML prototyping |
 | Maps | **Folium** | Interactive maps from Python |
 | Integrity | **SHA256 checksums** per day-file | Detect corruption |
-| Hosting | **Proxmox homelab + NAS** | User's existing infra; NAS provides durable local storage for raw data |
-| Backup | **rclone to cloud storage** (e.g. Backblaze B2) | Off-site redundancy beyond the NAS |
+| Hosting | **Proxmox homelab** | User's existing infra; receiver runs as container |
+| Backup | **S3-compatible storage** (boto3, every 5 min) | Self-hosted or cloud; durable off-site copy of raw data |
 
 ---
 

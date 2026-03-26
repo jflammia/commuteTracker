@@ -6,8 +6,18 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Storage paths
 RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", PROJECT_ROOT / "raw"))
 DERIVED_DATA_DIR = Path(os.environ.get("DERIVED_DATA_DIR", PROJECT_ROOT / "derived"))
+
+# Receiver
+RECEIVER_HOST = os.environ.get("RECEIVER_HOST", "0.0.0.0")
+RECEIVER_PORT = int(os.environ.get("RECEIVER_PORT", "8080"))
+
+# S3-compatible backup (optional)
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
+S3_BUCKET = os.environ.get("S3_BUCKET", "commute-tracker-raw")
+S3_SYNC_INTERVAL_SECONDS = int(os.environ.get("S3_SYNC_INTERVAL_SECONDS", "300"))
 
 # Home geofence - set these in .env
 HOME_LAT = float(os.environ.get("HOME_LAT", "0.0"))

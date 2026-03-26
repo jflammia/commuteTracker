@@ -1,0 +1,18 @@
+services:
+  receiver:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./raw:/data/raw
+    environment:
+      - RAW_DATA_DIR=/data/raw
+      - RECEIVER_HOST=0.0.0.0
+      - RECEIVER_PORT=8080
+      # S3-compatible backup (optional, uncomment and configure)
+      # - S3_ENDPOINT_URL=http://minio:9000
+      # - S3_BUCKET=commute-tracker-raw
+      # - AWS_ACCESS_KEY_ID=minioadmin
+      # - AWS_SECRET_ACCESS_KEY=minioadmin
+      # - S3_SYNC_INTERVAL_SECONDS=300
+    restart: unless-stopped
