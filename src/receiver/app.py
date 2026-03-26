@@ -140,7 +140,26 @@ async def lifespan(app: FastAPI):
                 logger.exception("Final S3 sync failed")
 
 
-app = FastAPI(title="Commute Tracker Receiver", lifespan=lifespan)
+app = FastAPI(
+    title="Commute Tracker",
+    version="0.1.0",
+    description=(
+        "GPS-based commute tracking system. Collects location data from OwnTracks, "
+        "segments commutes into transport modes (walk, drive, train, waiting), and "
+        "provides analytics for schedule optimization.\n\n"
+        "## Interfaces\n\n"
+        "- **OwnTracks receiver** — `POST /pub` (always returns 200)\n"
+        "- **REST API** — `/api/v1/*` (this documentation)\n"
+        "- **MCP server** — `/mcp` (Streamable HTTP for LLM integration)\n"
+        "- **Streamlit dashboard** — port 8501 (consumes this API)\n\n"
+        "## Key concepts\n\n"
+        "- **Commute**: A detected trip between home and work (or vice versa)\n"
+        "- **Segment**: A leg of a commute in a single transport mode\n"
+        "- **Label**: A user correction to a segment's auto-classified mode\n"
+        "- **Derived data**: Parquet files rebuilt from raw GPS records\n"
+    ),
+    lifespan=lifespan,
+)
 
 
 @app.post("/pub")
