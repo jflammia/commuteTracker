@@ -1,18 +1,38 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
+
+# Prevent Python from writing .pyc files and enable unbuffered output for logs
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# Install dependencies first (better layer caching - only rebuilds when deps change)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . && \
+    rm -rf /root/.cache
 
+# Copy application code
 COPY src/ src/
+COPY scripts/ scripts/
+COPY zones.json.example zones.json.example
 
-ENV DATABASE_URL=sqlite:///data/commute_tracker.db
-ENV RECEIVER_HOST=0.0.0.0
-ENV RECEIVER_PORT=8080
+# Create non-root user
+RUN groupadd --gid 1000 commute && \
+    useradd --uid 1000 --gid commute --shell /bin/bash commute && \
+    mkdir -p /data && chown commute:commute /data
+
+USER commute
+
+# Default environment
+ENV DATABASE_URL=sqlite:////data/commute_tracker.db \
+    RECEIVER_HOST=0.0.0.0 \
+    RECEIVER_PORT=8080
 
 EXPOSE 8080
 
 VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
 CMD ["uvicorn", "src.receiver.app:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,43 @@
+# Data directories (mounted at runtime, not baked into image)
+raw/
+derived/
+data/
+
+# Git
+.git/
+.gitignore
+
+# Environment and secrets
+.env
+.env.local
+.env.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+
+# Development
+.vscode/
+.idea/
+.ipynb_checkpoints/
+notebooks/
+tests/
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker (prevent recursive copy)
+Dockerfile
+docker-compose*.yml
+
+# Misc
+*.md
+LICENSE
