@@ -159,6 +159,26 @@ def resource_daily(day: str) -> str:
     return json.dumps(get_service().get_daily_summary(day), indent=2)
 
 
+@mcp.resource("dates://list")
+def resource_list_dates() -> str:
+    """List all dates that have processed commute data available.
+
+    Returns a JSON array of date strings (from Parquet file names).
+    Useful for knowing which days have data before querying.
+    """
+    return json.dumps(get_service().list_dates(), indent=2)
+
+
+@mcp.resource("labels://corrections")
+def resource_corrections_map() -> str:
+    """Get all label corrections as a flat lookup map.
+
+    Returns a JSON object mapping 'commute_id:segment_id' to the corrected
+    transport mode. Efficient for checking which segments have been corrected.
+    """
+    return json.dumps(get_service().get_corrections_map(), indent=2)
+
+
 @mcp.resource("labels://list")
 def resource_list_labels() -> str:
     """List all user-provided segment label corrections.
@@ -238,6 +258,54 @@ def add_segment_label(
         corrected_mode=corrected_mode,
         notes=notes,
     )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def add_segment_labels_bulk(
+    labels: list[dict],
+    ctx: Context,
+) -> str:
+    """Add multiple segment label corrections at once.
+
+    Useful for batch corrections or marking all segments as correct.
+    Each item in the list must have: commute_id, segment_id, original_mode,
+    corrected_mode. Optional: notes.
+
+    Example:
+    [
+        {"commute_id": "2026-03-26_am_001", "segment_id": 0,
+         "original_mode": "driving", "corrected_mode": "driving"},
+        {"commute_id": "2026-03-26_am_001", "segment_id": 1,
+         "original_mode": "stationary", "corrected_mode": "waiting"}
+    ]
+    """
+    service = ctx.request_context.lifespan_context.service
+    results = service.add_labels_bulk(labels)
+    return json.dumps(results, indent=2)
+
+
+@mcp.tool()
+def count_raw_records(
+    ctx: Context,
+    since: str | None = None,
+    until: str | None = None,
+    user: str | None = None,
+    device: str | None = None,
+) -> str:
+    """Count raw GPS records matching filters.
+
+    Useful for previewing how many records will be processed before
+    triggering a rebuild. Returns the count and the filters applied.
+
+    Args:
+        since: Start date inclusive (YYYY-MM-DD)
+        until: End date inclusive (YYYY-MM-DD)
+        user: Filter by OwnTracks user
+        device: Filter by OwnTracks device
+    """
+    service = ctx.request_context.lifespan_context.service
+    result = service.count_raw_records(since=since, until=until, user=user, device=device)
     return json.dumps(result, indent=2)
 
 

@@ -256,6 +256,79 @@ class CommuteService:
             "unsynced_records": self._db.count_unsynced(),
         }
 
+    def count_raw_records(
+        self,
+        since: str | None = None,
+        until: str | None = None,
+        user: str | None = None,
+        device: str | None = None,
+    ) -> dict:
+        """Count raw GPS records matching filters. Used for rebuild preview."""
+        from sqlalchemy import func
+        from src.storage.database import LocationRecord
+
+        with self._db.session() as session:
+            q = session.query(func.count(LocationRecord.id))
+            if since:
+                q = q.filter(LocationRecord.received_at >= since)
+            if until:
+                q = q.filter(LocationRecord.received_at <= until + "T23:59:59")
+            if user:
+                q = q.filter(LocationRecord.user == user)
+            if device:
+                q = q.filter(LocationRecord.device == device)
+            count = q.scalar()
+
+        return {
+            "count": count,
+            "filters": {
+                "since": since,
+                "until": until,
+                "user": user,
+                "device": device,
+            },
+        }
+
+    # ── Dates ─────────────────────────────────────────────────────────────────
+
+    def list_dates(self) -> list[str]:
+        """List all dates that have derived (processed) data available."""
+        return self._derived_store.list_dates()
+
+    # ── Label Corrections Map ─────────────────────────────────────────────────
+
+    def get_corrections_map(self) -> dict[str, str]:
+        """Get all label corrections as a flat lookup map.
+
+        Returns dict mapping "commute_id:segment_id" -> corrected_mode.
+        Efficient for frontends to check if any segment has been corrected.
+        """
+        raw_map = self._label_store.get_corrections_map()
+        # Convert tuple keys to string keys for JSON serialization
+        return {f"{cid}:{sid}": mode for (cid, sid), mode in raw_map.items()}
+
+    # ── Bulk Labels ───────────────────────────────────────────────────────────
+
+    def add_labels_bulk(self, labels: list[dict]) -> list[dict]:
+        """Add multiple segment label corrections at once.
+
+        Each item must have: commute_id, segment_id, original_mode, corrected_mode.
+        Optional: notes.
+
+        Returns the list of created/updated labels.
+        """
+        results = []
+        for item in labels:
+            label = self._label_store.add_label(
+                commute_id=item["commute_id"],
+                segment_id=item["segment_id"],
+                original_mode=item["original_mode"],
+                corrected_mode=item["corrected_mode"],
+                notes=item.get("notes", ""),
+            )
+            results.append(_label_to_dict(label))
+        return results
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

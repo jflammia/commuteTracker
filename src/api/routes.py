@@ -129,6 +129,23 @@ def get_raw_stats():
     return get_service().get_raw_stats()
 
 
+@router.get("/raw/count")
+def count_raw_records(
+    since: str | None = Query(default=None),
+    until: str | None = Query(default=None),
+    user: str | None = Query(default=None),
+    device: str | None = Query(default=None),
+):
+    """Count raw GPS records matching filters. Useful for rebuild preview."""
+    return get_service().count_raw_records(since=since, until=until, user=user, device=device)
+
+
+@router.get("/dates")
+def list_dates():
+    """List all dates that have derived (processed) data available."""
+    return get_service().list_dates()
+
+
 # ── Labels ────────────────────────────────────────────────────────────────────
 
 
@@ -148,6 +165,24 @@ def add_label(req: LabelRequest):
         corrected_mode=req.corrected_mode,
         notes=req.notes,
     )
+
+
+@router.get("/labels/corrections")
+def get_corrections():
+    """Get all corrections as a lookup map: 'commute_id:segment_id' -> corrected_mode.
+
+    Efficient for frontends to overlay corrections on segment displays.
+    """
+    return get_service().get_corrections_map()
+
+
+@router.post("/labels/bulk")
+def add_labels_bulk(labels: list[LabelRequest]):
+    """Add multiple segment label corrections at once.
+
+    Useful for 'mark all correct' or batch correction workflows.
+    """
+    return get_service().add_labels_bulk([lb.model_dump() for lb in labels])
 
 
 @router.get("/labels/export")

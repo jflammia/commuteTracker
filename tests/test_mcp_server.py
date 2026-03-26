@@ -20,6 +20,8 @@ def test_mcp_has_tools():
     expected = {
         "query_commute_data",
         "add_segment_label",
+        "add_segment_labels_bulk",
+        "count_raw_records",
         "rebuild_derived_data",
         "train_ml_model",
         "evaluate_classifier",

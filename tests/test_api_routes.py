@@ -106,3 +106,45 @@ def test_api_daily_empty(client):
     resp = client.get("/api/v1/daily/2026-01-01")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_api_dates_empty(client):
+    resp = client.get("/api/v1/dates")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_api_raw_count(client):
+    resp = client.get("/api/v1/raw/count")
+    assert resp.status_code == 200
+    assert resp.json()["count"] == 0
+
+
+def test_api_raw_count_filtered(client):
+    resp = client.get("/api/v1/raw/count?since=2026-01-01&user=test")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 0
+    assert data["filters"]["since"] == "2026-01-01"
+
+
+def test_api_corrections_empty(client):
+    resp = client.get("/api/v1/labels/corrections")
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+def test_api_bulk_labels(client):
+    labels = [
+        {"commute_id": "c1", "segment_id": 0, "original_mode": "driving", "corrected_mode": "train"},
+        {"commute_id": "c1", "segment_id": 1, "original_mode": "stationary", "corrected_mode": "waiting"},
+    ]
+    resp = client.post("/api/v1/labels/bulk", json=labels)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+    # Verify corrections map
+    resp = client.get("/api/v1/labels/corrections")
+    corrections = resp.json()
+    assert corrections["c1:0"] == "train"
+    assert corrections["c1:1"] == "waiting"

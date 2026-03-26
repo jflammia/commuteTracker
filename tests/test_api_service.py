@@ -96,3 +96,49 @@ def test_query_derived_empty(service):
     except Exception:
         # Some queries may fail without data, that's ok
         pass
+
+
+def test_list_dates_empty(service):
+    assert service.list_dates() == []
+
+
+def test_count_raw_records(service):
+    result = service.count_raw_records()
+    assert result["count"] == 0
+    assert result["filters"]["since"] is None
+
+
+def test_count_raw_records_with_filters(service):
+    result = service.count_raw_records(since="2026-01-01", user="testuser")
+    assert result["count"] == 0
+    assert result["filters"]["since"] == "2026-01-01"
+    assert result["filters"]["user"] == "testuser"
+
+
+def test_get_corrections_map_empty(service):
+    result = service.get_corrections_map()
+    assert result == {}
+
+
+def test_get_corrections_map_with_labels(service):
+    service.add_label("c1", 0, "driving", "train")
+    service.add_label("c1", 2, "stationary", "waiting")
+    corrections = service.get_corrections_map()
+    assert corrections["c1:0"] == "train"
+    assert corrections["c1:2"] == "waiting"
+
+
+def test_add_labels_bulk(service):
+    labels = [
+        {"commute_id": "c1", "segment_id": 0, "original_mode": "driving", "corrected_mode": "train"},
+        {"commute_id": "c1", "segment_id": 1, "original_mode": "stationary", "corrected_mode": "waiting", "notes": "platform wait"},
+    ]
+    results = service.add_labels_bulk(labels)
+    assert len(results) == 2
+    assert results[0]["corrected_mode"] == "train"
+    assert results[1]["corrected_mode"] == "waiting"
+    assert results[1]["notes"] == "platform wait"
+
+    # Verify they're persisted
+    all_labels = service.list_labels()
+    assert len(all_labels) == 2
