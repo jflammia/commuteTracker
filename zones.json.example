@@ -1,0 +1,39 @@
+{
+    "waypoints": [
+        {
+            "name": "Train Station",
+            "lat": 40.7506,
+            "lon": -73.9935,
+            "radius_m": 100,
+            "mode_hint": "train"
+        },
+        {
+            "name": "Parking Garage",
+            "lat": 40.7600,
+            "lon": -73.9800,
+            "radius_m": 50,
+            "mode_hint": "driving"
+        },
+        {
+            "name": "Bus Stop",
+            "lat": 40.7700,
+            "lon": -73.9700,
+            "radius_m": 30,
+            "mode_hint": null
+        }
+    ],
+    "corridors": [
+        {
+            "name": "NJ Transit Northeast Corridor",
+            "mode": "train",
+            "buffer_m": 150,
+            "points": [
+                [40.7506, -73.9935],
+                [40.7650, -73.9820],
+                [40.7800, -73.9710],
+                [40.8000, -73.9600],
+                [40.8300, -73.9450]
+            ]
+        }
+    ]
+}

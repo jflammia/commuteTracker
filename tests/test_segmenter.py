@@ -8,9 +8,6 @@ from src.processing.segmenter import (
     _smooth_modes,
     _assign_segment_ids,
     _merge_short_segments,
-    STATIONARY_MAX,
-    WALK_MAX,
-    TRAIN_MIN,
 )
 
 
