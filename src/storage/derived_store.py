@@ -102,3 +102,12 @@ class DerivedStore:
         """List all dates that have derived data."""
         parquet_files = sorted(self.derived_dir.rglob("*.parquet"))
         return [f.stem for f in parquet_files]
+
+    def get_commute_points(self, commute_id: str) -> pl.DataFrame:
+        """Get all points for a specific commute, ordered by timestamp."""
+        return self.query(f"""
+            SELECT *
+            FROM commute_data
+            WHERE commute_id = '{commute_id}'
+            ORDER BY timestamp
+        """)
