@@ -1,6 +1,6 @@
 [project]
 name = "commute-tracker"
-version = "0.0.4"
+version = "0.0.5"
 description = "Collect, segment, and analyze daily commute GPS data"
 requires-python = ">=3.11"
 dependencies = [
