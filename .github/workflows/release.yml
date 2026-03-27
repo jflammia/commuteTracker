@@ -69,7 +69,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           MINOR="${VERSION%.*}"
-          IMAGE="ghcr.io/${{ github.repository }}"
+          IMAGE="ghcr.io/${{ github.repository }}" && IMAGE="${IMAGE,,}"
           TAGS="${IMAGE}:${VERSION},${IMAGE}:${MINOR},${IMAGE}:latest"
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
