@@ -2,9 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Operating Principles
 
-Self-hosted GPS commute tracker that receives OwnTracks location data, detects commutes via geofencing, classifies transport modes (walk/drive/train/waiting/stationary), and surfaces analytics through a REST API, MCP server, and Streamlit dashboard. Designed for homelab/Proxmox deployment with durability-first design: raw data is immutable/append-only, all derived data (Parquet) is rebuildable from raw.
+These are non-negotiable. Follow them even when the user doesn't explicitly ask:
+
+- **Never work around failures.** If CI fails, a push is rejected, or a workflow breaks — diagnose and fix the root cause. Do not use manual workarounds (like `gh workflow run` to bypass broken automation). The user needs to know the real state of their infrastructure.
+- **Never add AI attribution.** No `Co-Authored-By: Claude`, `Signed-off-by`, or similar trailers in commits, PRs, or any git metadata.
+- **Always run `ruff format` before committing.** The pre-commit hook will block unformatted code. Format proactively rather than getting blocked.
+- **Every bug fix needs regression tests.** A fix without a test in `tests/test_audit_fixes.py` is incomplete. No exceptions.
+- **Verify CI after pushing.** Run `gh run list --limit 2` and confirm green. If red, fix it immediately.
+
+## Skills
+
+Use these skills for their respective tasks. Load the skill before starting work.
+
+| Skill | When to use | Path |
+|-------|------------|------|
+| **`commit-pr`** | Any commit, PR, or push | `.claude/skills/commit-pr/SKILL.md` |
+| **`fix-issue`** | Fixing GitHub issues (includes regression test requirement) | `.claude/skills/fix-issue/SKILL.md` |
+
+**Common workflows and which skills to use:**
+
+- "Commit this" / "push" / "make a PR" → `commit-pr`
+- "Fix the issues" / "check for bugs" / "#N" → `fix-issue` (which calls `commit-pr` for the commit step)
+- "Ship a release" → merge the open Release PR with `gh pr merge <N> --merge --admin`
+- "Check CI" → `gh run list --limit 5`
 
 ## Commands
 
@@ -13,16 +35,23 @@ Self-hosted GPS commute tracker that receives OwnTracks location data, detects c
 pip install -e ".[dev]"              # Dev dependencies (includes pytest, ruff, scikit-learn)
 pip install -e ".[ml]"               # ML dependencies only
 
+# Repo setup (run once after clone)
+bash .githooks/setup.sh              # Git hooks + rebase config
+
 # Test
 pytest                                # All tests
 pytest tests/test_api_service.py      # Single file
-pytest tests/test_api_service.py::test_list_commutes -v  # Single test
 pytest -k "commute_detector"          # Pattern match
 
 # Lint
+ruff format src/ tests/              # Auto-format (run BEFORE committing)
 ruff check src/ tests/               # Check style (line-length=100)
-ruff format --check src/ tests/      # Check formatting
-ruff format src/ tests/              # Auto-format
+
+# Commit flow (always this sequence)
+git add <files>
+git commit -m "..."                   # Pre-commit hook checks lint+format
+git pull                              # Rebase on remote (autostash handles dirty state)
+git push                              # Claude Code hook: lint + format + pull before push
 
 # Run locally
 uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080  # Receiver + API + MCP
@@ -36,6 +65,12 @@ docker compose down
 python scripts/rebuild_derived.py                          # Rebuild all Parquet from raw
 python scripts/rebuild_derived.py --since 2026-03-01 --until 2026-03-15
 python scripts/rebuild_derived.py --date 2026-03-26 --clean --dry-run
+
+# GitHub
+gh issue list --state open            # Check for issues
+gh run list --limit 5                 # Check CI status
+gh pr list                            # Check for Release PRs
+gh pr merge <N> --merge --admin       # Merge a Release PR (regular merge, not squash)
 ```
 
 ## Architecture
@@ -62,11 +97,6 @@ python scripts/rebuild_derived.py --date 2026-03-26 --clean --dry-run
 
 GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.yml` enforces conventional commits in PR titles. `release-please.yml` auto-creates a Release PR with changelog + version bump on each push to main. Merging the Release PR triggers `release.yml` which builds multi-arch (amd64+arm64) Docker image to GHCR. Use conventional commit prefixes in PR titles (`feat:`, `fix:`, `docs:`, etc.).
 
-## Skills
-
-- **`commit-pr`** (`.claude/skills/commit-pr/SKILL.md`) — Conventional commit messages and PR descriptions for release-please
-- **`fix-issue`** (`.claude/skills/fix-issue/SKILL.md`) — End-to-end GitHub issue fixing workflow. Every fix must include regression tests in `tests/test_audit_fixes.py` before closing.
-
 ## Commits & PRs
 
 Use the `commit-pr` skill for all commits and PRs. Key rules:
@@ -88,7 +118,7 @@ See `docs/mcp-integration.md` for the full tool/resource reference and LLM label
 Three layers block bad code from reaching main:
 
 1. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `bash .githooks/setup.sh` (also sets `pull.rebase=true` and `rebase.autoStash=true` to handle bot commits on remote)
-2. **Claude Code hook** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format before `git push`
+2. **Claude Code hook** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format + `git pull --rebase` before `git push`
 3. **GitHub branch protection** — PRs require Lint, Test, and Docker Build checks to pass
 
 If a commit is blocked, fix the issue first. Do not bypass with `--no-verify`.
