@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.4](https://github.com/jflammia/commuteTracker/compare/v0.0.3...v0.0.4) (2026-03-27)
+
+
+### Bug Fixes
+
+* **ci:** chain Docker build from release-please workflow ([919ea0e](https://github.com/jflammia/commuteTracker/commit/919ea0e11cbeb8e8279d0de292a2bf6238a376de))
+* use /data volume for derived/raw dirs in container deployments ([44dd43f](https://github.com/jflammia/commuteTracker/commit/44dd43f6740d57e3cb0608e579b9cfd39617c383)), closes [#6](https://github.com/jflammia/commuteTracker/issues/6)
+* use correct MCP transport type "http" in .mcp.json and docs ([6f1cf0d](https://github.com/jflammia/commuteTracker/commit/6f1cf0d0dae8f8b2c286d31744f958bdea42d693)), closes [#5](https://github.com/jflammia/commuteTracker/issues/5)
+
+
+### Documentation
+
+* document quality gates in CLAUDE.md and README ([82e6440](https://github.com/jflammia/commuteTracker/commit/82e64405d4778f0495579bc9f2365ae54cb08314))
+
 ## [0.0.3](https://github.com/jflammia/commuteTracker/compare/v0.0.2...v0.0.3) (2026-03-27)
 
 
