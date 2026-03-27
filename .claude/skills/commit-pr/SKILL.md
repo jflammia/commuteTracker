@@ -75,6 +75,21 @@ This means:
 - **For direct pushes to main** (no PR): the commit message itself is
   parsed. Follow the same conventional commit format.
 
+## Before You Commit
+
+This repo has quality gates that will block bad commits. Run these
+proactively so you don't get blocked:
+
+```bash
+ruff format src/ tests/              # Auto-fix formatting
+ruff check src/ tests/               # Check lint
+python -m pytest --tb=short -q       # Run tests
+```
+
+The pre-commit hook (`.githooks/pre-commit`) runs lint + format check on
+every commit. The Claude Code hook (`.claude/settings.json`) also runs
+tests. If either blocks, fix the issue and retry — do not use `--no-verify`.
+
 ## Writing the Commit Message
 
 ### Step 1: Understand the changes
@@ -111,14 +126,27 @@ Separate from subject with a blank line. Explain:
 - **What** changed at a high level (not a file-by-file list)
 - Keep it concise — a few bullet points or a short paragraph
 
-### Step 5: No AI attribution trailers
+### Step 5: Issue-closing footers
+
+If this commit fixes a GitHub issue, include `Fixes #N` in the body. GitHub
+auto-closes the issue when the commit lands on main. Example:
+
+```
+fix: MCP server 421 error behind reverse proxy
+
+Set host=RECEIVER_HOST to skip DNS rebinding auto-protection.
+
+Fixes #3
+```
+
+### Step 6: No AI attribution trailers
 
 Do NOT add `Co-Authored-By`, `Signed-off-by`, or any other trailer that
 attributes the commit to an AI. The repo owner is the author — the commit
 should look like any other human-written commit. This applies to commits,
 PRs, and any git metadata.
 
-### Step 6: Use a HEREDOC for the commit
+### Step 7: Use a HEREDOC for the commit
 
 Always pass the message via HEREDOC to preserve formatting:
 ```bash
@@ -128,6 +156,8 @@ fix(pipeline): filter non-location records before enrichment
 Pipeline crashed with 500 error when rebuilding without filters because
 transition and card records have null timestamps. Now filters
 msg_type=location at the DB query level.
+
+Fixes #8
 EOF
 )"
 ```
@@ -153,8 +183,6 @@ Use this structure:
 
 ## Test plan
 - [ ] <how to verify this works>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
 ### Creating the PR
@@ -166,11 +194,20 @@ gh pr create --title "<conventional commit title>" --body "$(cat <<'EOF'
 
 ## Test plan
 - [ ] <verification steps>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```
+
+## Merging a Release PR
+
+When release-please opens a Release PR ("chore(main): release X.Y.Z"):
+
+```bash
+gh pr merge <N> --merge           # Regular merge, NOT squash
+gh pr merge <N> --merge --admin   # If branch protection blocks it
+```
+
+This triggers the full release pipeline: tag → GitHub Release → Docker build.
 
 ## Examples
 
@@ -202,14 +239,15 @@ Wrap all query results in a {data: [...], meta: {...}} envelope.
 BREAKING CHANGE: /api/v1/query now returns {data, meta} instead of a bare array.
 ```
 
-**Multi-fix commit with body:**
+**Bug fix that closes an issue:**
 ```
-fix: MCP server, SQL injection, pipeline crashes, and dashboard perf
+fix: MCP server 421 error behind reverse proxy
 
-- Fix MCP server mounting (double path + missing lifespan init)
-- Parameterize DuckDB queries to prevent SQL injection
-- Filter non-location records before pipeline enrichment
-- Add batch segments endpoint to fix N+1 in dashboard
+The MCP SDK auto-enables DNS rebinding protection when host is localhost,
+rejecting all proxy Host headers. Set host=RECEIVER_HOST (0.0.0.0) to
+skip auto-protection.
+
+Fixes #3
 ```
 
 ## Common Mistakes to Avoid
@@ -221,3 +259,5 @@ fix: MCP server, SQL injection, pipeline crashes, and dashboard perf
 - **Adding AI attribution trailers** (`Co-Authored-By: Claude ...`) — never do this
 - **Using `feat` for non-user-facing changes** — internal refactors are `refactor`
 - **Putting everything in one giant commit** — prefer logical, atomic commits
+- **Skipping `ruff format`** before committing — the pre-commit hook will block you
+- **Squashing a Release PR** — use regular merge for release-please PRs

@@ -24,9 +24,9 @@ exceptions — a fix without a test is incomplete.
 3. Investigate root cause
 4. Implement the fix
 5. Write regression tests  ← required, not optional
-6. Run full test suite + lint
+6. Format, lint, and test
 7. Commit with "Fixes #N"
-8. Push and verify issue closes
+8. Push and verify issue closes + CI green
 ```
 
 ## Step 1: Read the Issue
@@ -77,7 +77,7 @@ would catch this exact problem if it were reintroduced.
 
 Good regression tests:
 - **Test the specific failure mode** from the issue, not just the happy path
-- **Include the issue number** in the test docstring for traceability
+- **Include the issue URL** in the test docstring for traceability
 - **Test at the right level** — unit test if it's a logic bug, integration test
   if it's a wiring/config issue
 - **Have descriptive names** that explain what they guard against
@@ -108,24 +108,28 @@ Think about what could reintroduce this bug:
 
 Write tests that catch each of those scenarios.
 
-## Step 6: Run Full Test Suite + Lint
+## Step 6: Format, Lint, and Test
 
-Every fix must pass the full suite, not just the new tests:
+Run these in order — format first, then check, then test:
 
 ```bash
-python -m pytest --tb=short
-ruff check src/ tests/
-ruff format --check src/ tests/
+ruff format src/ tests/               # Auto-fix formatting FIRST
+ruff check src/ tests/                # Then check lint
+python -m pytest --tb=short           # Then run tests
 ```
 
-If lint or format fails, fix it before committing. If existing tests break,
-that means the fix has side effects that need to be addressed.
+Format first because the pre-commit hook (`.githooks/pre-commit`) and
+Claude Code hook (`.claude/settings.json`) will block your commit if
+formatting is off. Running `ruff format` proactively avoids this.
+
+If existing tests break, that means the fix has side effects — address
+them before committing.
 
 ## Step 7: Commit with "Fixes #N"
 
 Use the `commit-pr` skill for the message format. The commit must include
-`Fixes #N` in the body or footer — GitHub auto-closes the issue when this
-lands on main.
+`Fixes #N` in the body — GitHub auto-closes the issue when this lands on
+main.
 
 Structure the commit as two atomic changes if it makes sense:
 1. The fix itself: `fix: <description>` with `Fixes #N`
@@ -152,7 +156,12 @@ Then verify:
 - `gh issue view <number>` — should show CLOSED
 - `gh run list --limit 2` — CI should be green
 
-If CI fails, fix it before moving on.
+If CI fails, that is a real problem. Do not move on — diagnose and fix it.
+Do not use workarounds like manually triggering workflows.
+
+After pushing `fix:` commits, release-please will open or update a Release
+PR. You don't need to merge it immediately — it accumulates changes until
+the user is ready to release.
 
 ## Checklist
 
@@ -162,6 +171,7 @@ Before calling an issue done, verify every item:
 - [ ] Fix is minimal and targeted
 - [ ] Regression tests added to `tests/test_audit_fixes.py`
 - [ ] Tests include the issue URL in docstrings
+- [ ] `ruff format src/ tests/` run (auto-fix formatting)
 - [ ] Full test suite passes (`python -m pytest`)
 - [ ] Lint passes (`ruff check src/ tests/`)
 - [ ] Commit message includes `Fixes #N`
