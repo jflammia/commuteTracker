@@ -35,7 +35,9 @@ class DerivedStore:
         if not self._has_parquet_files():
             return pl.DataFrame()
         glob = self._parquet_glob()
-        full_sql = f"WITH commute_data AS (SELECT * FROM read_parquet('{glob}', union_by_name=true)) {sql}"
+        full_sql = (
+            f"WITH commute_data AS (SELECT * FROM read_parquet('{glob}', union_by_name=true)) {sql}"
+        )
         return self._conn.execute(full_sql).pl()
 
     def get_commutes(self) -> pl.DataFrame:

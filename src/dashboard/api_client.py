@@ -45,6 +45,7 @@ def _to_df(records: list[dict]) -> pl.DataFrame:
 
 # ── Health & Dates ────────────────────────────────────────────────────────────
 
+
 def get_health() -> dict:
     return _get("/health")
 
@@ -54,6 +55,7 @@ def list_dates() -> list[str]:
 
 
 # ── Commutes ──────────────────────────────────────────────────────────────────
+
 
 def get_commutes() -> pl.DataFrame:
     """List all commutes as a Polars DataFrame."""
@@ -105,6 +107,7 @@ def get_commute_points(commute_id: str) -> pl.DataFrame:
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
+
 def get_stats() -> pl.DataFrame:
     """Get aggregate stats as a Polars DataFrame."""
     data = _get("/stats")
@@ -129,6 +132,7 @@ def get_daily_summary(day: str) -> pl.DataFrame:
 
 # ── Raw Data ──────────────────────────────────────────────────────────────────
 
+
 def count_raw_records(
     since: str | None = None,
     until: str | None = None,
@@ -139,6 +143,7 @@ def count_raw_records(
 
 
 # ── Labels ────────────────────────────────────────────────────────────────────
+
 
 def get_labels(commute_id: str | None = None) -> list[dict]:
     return _get("/labels", commute_id=commute_id)
@@ -151,13 +156,16 @@ def add_label(
     corrected_mode: str,
     notes: str = "",
 ) -> dict:
-    return _post("/labels", json={
-        "commute_id": commute_id,
-        "segment_id": segment_id,
-        "original_mode": original_mode,
-        "corrected_mode": corrected_mode,
-        "notes": notes,
-    })
+    return _post(
+        "/labels",
+        json={
+            "commute_id": commute_id,
+            "segment_id": segment_id,
+            "original_mode": original_mode,
+            "corrected_mode": corrected_mode,
+            "notes": notes,
+        },
+    )
 
 
 def add_labels_bulk(labels: list[dict]) -> list[dict]:
@@ -179,6 +187,7 @@ def label_count() -> int:
 
 # ── Label Intelligence ───────────────────────────────────────────────────────
 
+
 def analyze_segment(commute_id: str, segment_id: int) -> dict:
     """Deep analysis of a single segment with mismatch detection."""
     return _get(f"/labels/analyze/{commute_id}/{segment_id}")
@@ -196,13 +205,17 @@ def review_recent(n: int = 5, direction: str | None = None) -> dict:
 
 def apply_corrections(corrections: list[dict], min_confidence: float = 0.7) -> dict:
     """Apply suggested corrections from a review."""
-    return _post("/labels/apply", json={
-        "corrections": corrections,
-        "min_confidence": min_confidence,
-    })
+    return _post(
+        "/labels/apply",
+        json={
+            "corrections": corrections,
+            "min_confidence": min_confidence,
+        },
+    )
 
 
 # ── Processing ────────────────────────────────────────────────────────────────
+
 
 def rebuild_derived(
     since: str | None = None,
@@ -212,11 +225,14 @@ def rebuild_derived(
     clean: bool = False,
     dry_run: bool = False,
 ) -> dict:
-    return _post("/rebuild", json={
-        "since": since,
-        "until": until,
-        "user": user,
-        "device": device,
-        "clean": clean,
-        "dry_run": dry_run,
-    })
+    return _post(
+        "/rebuild",
+        json={
+            "since": since,
+            "until": until,
+            "user": user,
+            "device": device,
+            "clean": clean,
+            "dry_run": dry_run,
+        },
+    )

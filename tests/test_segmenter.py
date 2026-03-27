@@ -77,10 +77,12 @@ def test_merge_short_segments():
 
 
 def test_segment_commute_adds_columns():
-    df = pl.DataFrame({
-        "speed_kmh": [0.5, 3.0, 5.0, 15.0, 50.0],
-        "time_delta_s": [0.0, 10.0, 10.0, 10.0, 10.0],
-    })
+    df = pl.DataFrame(
+        {
+            "speed_kmh": [0.5, 3.0, 5.0, 15.0, 50.0],
+            "time_delta_s": [0.0, 10.0, 10.0, 10.0, 10.0],
+        }
+    )
     result = segment_commute(df)
     assert "transport_mode" in result.columns
     assert "segment_id" in result.columns
@@ -88,10 +90,12 @@ def test_segment_commute_adds_columns():
 
 def test_segment_commute_classifies_modes():
     # Create a clear sequence: stationary -> walking -> driving -> train
-    df = pl.DataFrame({
-        "speed_kmh": [0.0] * 10 + [4.0] * 10 + [20.0] * 10 + [60.0] * 10,
-        "time_delta_s": [10.0] * 40,
-    })
+    df = pl.DataFrame(
+        {
+            "speed_kmh": [0.0] * 10 + [4.0] * 10 + [20.0] * 10 + [60.0] * 10,
+            "time_delta_s": [10.0] * 40,
+        }
+    )
     result = segment_commute(df)
     modes = result["transport_mode"].to_list()
     # First points should be waiting (stationary at start, adjacent to moving mode)

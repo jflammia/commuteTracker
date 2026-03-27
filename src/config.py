@@ -11,7 +11,9 @@ RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", PROJECT_ROOT / "raw"))
 DERIVED_DATA_DIR = Path(os.environ.get("DERIVED_DATA_DIR", PROJECT_ROOT / "derived"))
 
 # Database
-DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{PROJECT_ROOT / 'data' / 'commute_tracker.db'}")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", f"sqlite:///{PROJECT_ROOT / 'data' / 'commute_tracker.db'}"
+)
 
 # Receiver
 RECEIVER_HOST = os.environ.get("RECEIVER_HOST", "0.0.0.0")

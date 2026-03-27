@@ -1,6 +1,5 @@
 """Tests for ML feature engineering and baseline model."""
 
-
 import polars as pl
 import pytest
 
@@ -16,6 +15,7 @@ from src.ml.features import (
 
 # --- Helper ---
 
+
 def _make_enriched_df(n: int = 50) -> pl.DataFrame:
     """Create a synthetic enriched DataFrame for testing."""
     from datetime import datetime, timezone, timedelta
@@ -23,21 +23,24 @@ def _make_enriched_df(n: int = 50) -> pl.DataFrame:
     base_time = datetime(2026, 3, 26, 8, 0, 0, tzinfo=timezone.utc)
     rows = []
     for i in range(n):
-        rows.append({
-            "lat": 40.75 + i * 0.001,
-            "lon": -74.00 + i * 0.0005,
-            "tst": 1711440000 + i * 10,
-            "speed_kmh": 5.0 + i * 1.5,  # gradually increasing
-            "distance_m": 15.0 + i * 2.0,
-            "time_delta_s": 10.0,
-            "timestamp": base_time + timedelta(seconds=i * 10),
-            "transport_mode": "walking" if i < 15 else ("driving" if i < 35 else "train"),
-            "segment_id": 0 if i < 15 else (1 if i < 35 else 2),
-        })
+        rows.append(
+            {
+                "lat": 40.75 + i * 0.001,
+                "lon": -74.00 + i * 0.0005,
+                "tst": 1711440000 + i * 10,
+                "speed_kmh": 5.0 + i * 1.5,  # gradually increasing
+                "distance_m": 15.0 + i * 2.0,
+                "time_delta_s": 10.0,
+                "timestamp": base_time + timedelta(seconds=i * 10),
+                "transport_mode": "walking" if i < 15 else ("driving" if i < 35 else "train"),
+                "segment_id": 0 if i < 15 else (1 if i < 35 else 2),
+            }
+        )
     return pl.DataFrame(rows)
 
 
 # --- Feature extraction ---
+
 
 def test_extract_features_adds_columns():
     df = _make_enriched_df()
@@ -53,10 +56,17 @@ def test_extract_features_correct_length():
 
 
 def test_extract_features_empty():
-    df = pl.DataFrame({
-        "lat": [], "lon": [], "tst": [], "speed_kmh": [],
-        "distance_m": [], "time_delta_s": [], "timestamp": [],
-    })
+    df = pl.DataFrame(
+        {
+            "lat": [],
+            "lon": [],
+            "tst": [],
+            "speed_kmh": [],
+            "distance_m": [],
+            "time_delta_s": [],
+            "timestamp": [],
+        }
+    )
     result = extract_point_features(df)
     assert result.is_empty()
 
@@ -113,6 +123,7 @@ def test_rolling_features():
 
 # --- Training set ---
 
+
 def test_build_training_set():
     df = _make_enriched_df()
     df = extract_point_features(df)
@@ -136,6 +147,7 @@ def test_build_training_set_drops_nulls():
 
 # --- Utility functions ---
 
+
 def test_mean():
     assert _mean([1.0, 2.0, 3.0]) == 2.0
     assert _mean([]) == 0.0
@@ -148,6 +160,7 @@ def test_std():
 
 
 # --- Model (requires scikit-learn) ---
+
 
 def test_model_train_and_predict():
     pytest.importorskip("sklearn")

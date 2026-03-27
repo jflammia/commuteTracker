@@ -356,9 +356,7 @@ class CommuteService:
 
         speed_col = seg_points["speed_kmh"]
         classified_mode = (
-            seg_points["transport_mode"][0]
-            if "transport_mode" in seg_points.columns
-            else "unknown"
+            seg_points["transport_mode"][0] if "transport_mode" in seg_points.columns else "unknown"
         )
 
         stats: dict = {
@@ -396,9 +394,7 @@ class CommuteService:
                     seg_list[idx - 1]["transport_mode"] if idx > 0 else None
                 )
                 stats["next_segment_mode"] = (
-                    seg_list[idx + 1]["transport_mode"]
-                    if idx < len(seg_list) - 1
-                    else None
+                    seg_list[idx + 1]["transport_mode"] if idx < len(seg_list) - 1 else None
                 )
 
         # Mismatch detection
@@ -459,9 +455,7 @@ class CommuteService:
                 speed_std = round(std_val, 1) if std_val is not None else 0.0
 
             prev_mode = seg_list[i - 1]["transport_mode"] if i > 0 else None
-            next_mode = (
-                seg_list[i + 1]["transport_mode"] if i < len(seg_list) - 1 else None
-            )
+            next_mode = seg_list[i + 1]["transport_mode"] if i < len(seg_list) - 1 else None
 
             analysis = _detect_mode_mismatch(
                 mode, avg_speed, max_speed, speed_std, prev_mode, next_mode
@@ -542,11 +536,13 @@ class CommuteService:
             review = self.review_commute_segments(cid)
             if "error" in review:
                 continue
-            commute_summaries.append({
-                "commute_id": cid,
-                "total_segments": review["total_segments"],
-                "flagged_count": review["flagged_count"],
-            })
+            commute_summaries.append(
+                {
+                    "commute_id": cid,
+                    "total_segments": review["total_segments"],
+                    "flagged_count": review["flagged_count"],
+                }
+            )
             for f in review.get("flagged_segments", []):
                 all_flagged.append({**f, "commute_id": cid})
 
@@ -561,15 +557,17 @@ class CommuteService:
         systematic = []
         for pattern, instances in sorted(patterns.items(), key=lambda x: -len(x[1])):
             speeds = [i["avg_speed_kmh"] for i in instances]
-            systematic.append({
-                "pattern": pattern,
-                "count": len(instances),
-                "avg_speed_kmh": round(sum(speeds) / len(speeds), 1) if speeds else 0,
-                "avg_confidence": round(
-                    sum(i["confidence"] for i in instances) / len(instances), 2
-                ),
-                "commute_ids": list({i["commute_id"] for i in instances}),
-            })
+            systematic.append(
+                {
+                    "pattern": pattern,
+                    "count": len(instances),
+                    "avg_speed_kmh": round(sum(speeds) / len(speeds), 1) if speeds else 0,
+                    "avg_confidence": round(
+                        sum(i["confidence"] for i in instances) / len(instances), 2
+                    ),
+                    "commute_ids": list({i["commute_id"] for i in instances}),
+                }
+            )
 
         corrections = self.get_corrections_map()
         all_suggestions = [
@@ -613,10 +611,12 @@ class CommuteService:
         for c in corrections:
             confidence = c.get("confidence", 0)
             if confidence < min_confidence:
-                skipped.append({
-                    **c,
-                    "skip_reason": f"confidence {confidence} < {min_confidence}",
-                })
+                skipped.append(
+                    {
+                        **c,
+                        "skip_reason": f"confidence {confidence} < {min_confidence}",
+                    }
+                )
                 continue
 
             label = self._label_store.add_label(

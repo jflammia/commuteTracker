@@ -53,9 +53,7 @@ count_result = count_raw_records(
 )
 record_count = count_result["count"]
 
-active_filters = {
-    k: v for k, v in count_result["filters"].items() if v is not None
-}
+active_filters = {k: v for k, v in count_result["filters"].items() if v is not None}
 filter_desc = ", ".join(f"{k}={v}" for k, v in active_filters.items()) or "all records"
 
 col_m1, col_m2 = st.columns(2)

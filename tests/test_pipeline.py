@@ -18,8 +18,12 @@ def _pipeline_config():
     """Return a mock.patch context that sets pipeline geofence config."""
     return patch.multiple(
         "src.processing.pipeline",
-        HOME_LAT=HOME[0], HOME_LON=HOME[1], HOME_RADIUS_M=200.0,
-        WORK_LAT=WORK[0], WORK_LON=WORK[1], WORK_RADIUS_M=200.0,
+        HOME_LAT=HOME[0],
+        HOME_LON=HOME[1],
+        HOME_RADIUS_M=200.0,
+        WORK_LAT=WORK[0],
+        WORK_LON=WORK[1],
+        WORK_RADIUS_M=200.0,
     )
 
 
@@ -53,19 +57,28 @@ def test_process_locations_adds_expected_columns():
     with _pipeline_config():
         df = _make_commute_df()
         result = process_locations(df)
-        expected_cols = ["timestamp", "distance_m", "speed_kmh", "commute_id",
-                         "commute_direction", "transport_mode", "segment_id"]
+        expected_cols = [
+            "timestamp",
+            "distance_m",
+            "speed_kmh",
+            "commute_id",
+            "commute_direction",
+            "transport_mode",
+            "segment_id",
+        ]
         for col in expected_cols:
             assert col in result.columns, f"Missing column: {col}"
 
 
 def test_process_locations_filters_non_location():
     with _pipeline_config():
-        df = pl.DataFrame([
-            {"_type": "location", "lat": 40.75, "lon": -74.00, "tst": 1000},
-            {"_type": "transition", "lat": 40.75, "lon": -74.00, "tst": 1010},
-            {"_type": "location", "lat": 40.76, "lon": -74.00, "tst": 1020},
-        ])
+        df = pl.DataFrame(
+            [
+                {"_type": "location", "lat": 40.75, "lon": -74.00, "tst": 1000},
+                {"_type": "transition", "lat": 40.75, "lon": -74.00, "tst": 1010},
+                {"_type": "location", "lat": 40.76, "lon": -74.00, "tst": 1020},
+            ]
+        )
         result = process_locations(df)
         assert len(result) == 2
 

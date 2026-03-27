@@ -55,7 +55,9 @@ selected_commute = st.sidebar.selectbox(
     "Select commute",
     commute_ids,
     index=len(commute_ids) - 1,
-    format_func=lambda cid: f"{cid} ({commutes.filter(pl.col('commute_id') == cid)['duration_min'][0]} min)",
+    format_func=lambda cid: (
+        f"{cid} ({commutes.filter(pl.col('commute_id') == cid)['duration_min'][0]} min)"
+    ),
 )
 
 # Show existing label count for this commute
@@ -100,7 +102,11 @@ try:
     if "segment_id" in points.columns:
         for sid in points["segment_id"].unique().sort().to_list():
             seg_points = points.filter(pl.col("segment_id") == sid)
-            mode = seg_points["transport_mode"][0] if "transport_mode" in seg_points.columns else "unknown"
+            mode = (
+                seg_points["transport_mode"][0]
+                if "transport_mode" in seg_points.columns
+                else "unknown"
+            )
 
             # Check if this segment has been corrected
             corrected = corrections.get((selected_commute, sid))
@@ -149,7 +155,9 @@ try:
         "font-size:13px;'>"
     )
     for mode, color in MODE_COLORS.items():
-        legend_html += f"<div><span style='color:{color};font-size:16px;'>&#9644;</span> {mode}</div>"
+        legend_html += (
+            f"<div><span style='color:{color};font-size:16px;'>&#9644;</span> {mode}</div>"
+        )
     legend_html += "</div>"
     m.get_root().html.add_child(folium.Element(legend_html))
 
@@ -163,9 +171,14 @@ except ImportError:
 st.subheader("Speed Timeline")
 
 if "speed_kmh" in points.columns and "timestamp" in points.columns:
-    chart_data = points.select([
-        "timestamp", "speed_kmh", "transport_mode", "segment_id",
-    ]).to_pandas()
+    chart_data = points.select(
+        [
+            "timestamp",
+            "speed_kmh",
+            "transport_mode",
+            "segment_id",
+        ]
+    ).to_pandas()
 
     # Apply corrections to display
     for (cid, sid), corrected_mode in corrections.items():
@@ -176,14 +189,17 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
     seg_bands = []
     for sid in chart_data["segment_id"].unique():
         seg_rows = chart_data[chart_data["segment_id"] == sid]
-        seg_bands.append({
-            "start": seg_rows["timestamp"].min(),
-            "end": seg_rows["timestamp"].max(),
-            "mode": seg_rows["transport_mode"].iloc[0],
-            "segment_id": int(sid),
-        })
+        seg_bands.append(
+            {
+                "start": seg_rows["timestamp"].min(),
+                "end": seg_rows["timestamp"].max(),
+                "mode": seg_rows["transport_mode"].iloc[0],
+                "segment_id": int(sid),
+            }
+        )
 
     import pandas as pd
+
     bands_df = pd.DataFrame(seg_bands)
 
     bg = (
@@ -258,9 +274,9 @@ for row_idx in range(len(segments)):
     col_info, col_mode, col_note, col_action = st.columns([3, 2, 3, 1])
 
     with col_info:
-        duration_str = f"{seg['duration_min']} min" if seg['duration_min'] else "< 1 min"
-        distance_str = f"{seg['distance_m']:.0f} m" if seg['distance_m'] else "0 m"
-        speed_str = f"{seg['avg_speed_kmh']} km/h" if seg['avg_speed_kmh'] else "-"
+        duration_str = f"{seg['duration_min']} min" if seg["duration_min"] else "< 1 min"
+        distance_str = f"{seg['distance_m']:.0f} m" if seg["distance_m"] else "0 m"
+        speed_str = f"{seg['avg_speed_kmh']} km/h" if seg["avg_speed_kmh"] else "-"
 
         color = MODE_COLORS.get(current_mode, "#7f8c8d")
         st.markdown(
@@ -327,13 +343,15 @@ with col_bulk1:
             sid = seg["segment_id"]
             mode = seg["transport_mode"]
             if (selected_commute, sid) not in corrections:
-                bulk_labels.append({
-                    "commute_id": selected_commute,
-                    "segment_id": sid,
-                    "original_mode": mode,
-                    "corrected_mode": mode,
-                    "notes": "confirmed correct",
-                })
+                bulk_labels.append(
+                    {
+                        "commute_id": selected_commute,
+                        "segment_id": sid,
+                        "original_mode": mode,
+                        "corrected_mode": mode,
+                        "notes": "confirmed correct",
+                    }
+                )
         if bulk_labels:
             add_labels_bulk(bulk_labels)
         st.toast("All segments marked as correct")
@@ -347,14 +365,16 @@ with col_bulk2:
         for lbl in labels:
             was_changed = lbl["original_mode"] != lbl["corrected_mode"]
             labeled_at = lbl.get("labeled_at", "")
-            summary_data.append({
-                "Segment": lbl["segment_id"],
-                "Original": lbl["original_mode"],
-                "Corrected": lbl["corrected_mode"],
-                "Changed": "yes" if was_changed else "confirmed",
-                "Notes": lbl.get("notes", ""),
-                "Labeled": labeled_at[:19] if labeled_at else "",
-            })
+            summary_data.append(
+                {
+                    "Segment": lbl["segment_id"],
+                    "Original": lbl["original_mode"],
+                    "Corrected": lbl["corrected_mode"],
+                    "Changed": "yes" if was_changed else "confirmed",
+                    "Notes": lbl.get("notes", ""),
+                    "Labeled": labeled_at[:19] if labeled_at else "",
+                }
+            )
         st.dataframe(
             summary_data,
             use_container_width=True,

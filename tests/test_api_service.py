@@ -1,6 +1,5 @@
 """Tests for the API service layer and REST routes."""
 
-
 import pytest
 
 from src.api.service import CommuteService
@@ -126,8 +125,19 @@ def test_get_corrections_map_with_labels(service):
 
 def test_add_labels_bulk(service):
     labels = [
-        {"commute_id": "c1", "segment_id": 0, "original_mode": "driving", "corrected_mode": "train"},
-        {"commute_id": "c1", "segment_id": 1, "original_mode": "stationary", "corrected_mode": "waiting", "notes": "platform wait"},
+        {
+            "commute_id": "c1",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+        },
+        {
+            "commute_id": "c1",
+            "segment_id": 1,
+            "original_mode": "stationary",
+            "corrected_mode": "waiting",
+            "notes": "platform wait",
+        },
     ]
     results = service.add_labels_bulk(labels)
     assert len(results) == 2

@@ -19,7 +19,6 @@ import math
 import polars as pl
 
 
-
 def extract_point_features(df: pl.DataFrame) -> pl.DataFrame:
     """Extract per-point features from an enriched DataFrame.
 

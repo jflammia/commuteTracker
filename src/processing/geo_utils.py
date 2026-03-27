@@ -22,6 +22,8 @@ def speed_kmh(distance_m: float, duration_s: float) -> float:
     return (distance_m / duration_s) * 3.6
 
 
-def in_geofence(lat: float, lon: float, center_lat: float, center_lon: float, radius_m: float) -> bool:
+def in_geofence(
+    lat: float, lon: float, center_lat: float, center_lon: float, radius_m: float
+) -> bool:
     """Return True if the point is within radius_m of the center."""
     return haversine_m(lat, lon, center_lat, center_lon) <= radius_m

@@ -106,13 +106,15 @@ def train_from_labels(
     if features.is_empty():
         raise ValueError("No labeled points found in the training data.")
 
-    logger.info(f"Feature matrix: {features.shape}, label distribution: "
-                f"{labels.value_counts().to_dict()}")
+    logger.info(
+        f"Feature matrix: {features.shape}, label distribution: {labels.value_counts().to_dict()}"
+    )
 
     # Train
     model = BaselineModel()
     metrics = model.train(
-        features, labels,
+        features,
+        labels,
         max_depth=max_depth,
         test_fraction=test_fraction,
     )
@@ -120,6 +122,7 @@ def train_from_labels(
     # Save
     if model_path is None:
         from src.config import DERIVED_DATA_DIR
+
         model_path = Path(derived_dir or DERIVED_DATA_DIR) / "model" / "baseline.json"
 
     model.save(model_path)
@@ -180,5 +183,7 @@ def evaluate_classifier_accuracy(
         "accuracy": round(correct / total, 4),
         "correct": correct,
         "total": total,
-        "confusion": {f"{pred}->{actual}": count for (pred, actual), count in sorted(confusion.items())},
+        "confusion": {
+            f"{pred}->{actual}": count for (pred, actual), count in sorted(confusion.items())
+        },
     }

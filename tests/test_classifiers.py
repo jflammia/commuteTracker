@@ -17,6 +17,7 @@ from src.processing.classifiers.ensemble import (
 
 # --- ModeScores ---
 
+
 def test_mode_scores_winner():
     s = ModeScores(stationary=0.1, walking=0.3, driving=0.8, train=0.2)
     assert s.winner() == "driving"
@@ -38,6 +39,7 @@ def test_mode_scores_scale():
 
 
 # --- SpeedClassifier ---
+
 
 def _speed_df(speeds: list[float]) -> pl.DataFrame:
     return pl.DataFrame({"speed_kmh": speeds})
@@ -82,6 +84,7 @@ def test_speed_classifier_custom_thresholds():
 
 # --- SpeedVarianceClassifier ---
 
+
 def test_speed_variance_no_signal_at_low_speed():
     c = SpeedVarianceClassifier()
     scores = c.score(_speed_df([5.0] * 20))
@@ -102,14 +105,35 @@ def test_speed_variance_smooth_high_speed_favors_train():
 def test_speed_variance_variable_speed_favors_driving():
     c = SpeedVarianceClassifier(window_size=5, smooth_cv_threshold=0.25)
     # Alternating speeds -- variable, should favor driving
-    speeds = [20.0, 40.0, 15.0, 45.0, 20.0, 35.0, 10.0, 50.0, 25.0, 40.0,
-              15.0, 45.0, 20.0, 35.0, 10.0, 50.0, 25.0, 40.0, 15.0, 45.0]
+    speeds = [
+        20.0,
+        40.0,
+        15.0,
+        45.0,
+        20.0,
+        35.0,
+        10.0,
+        50.0,
+        25.0,
+        40.0,
+        15.0,
+        45.0,
+        20.0,
+        35.0,
+        10.0,
+        50.0,
+        25.0,
+        40.0,
+        15.0,
+        45.0,
+    ]
     scores = c.score(_speed_df(speeds))
     driving_signals = [s.driving for s in scores if s.driving > 0]
     assert len(driving_signals) > 0, "Variable speed should produce driving signals"
 
 
 # --- WaypointClassifier ---
+
 
 def test_waypoint_contains():
     wp = Waypoint(name="Station", lat=40.75, lon=-74.00, radius_m=100)
@@ -120,10 +144,12 @@ def test_waypoint_contains():
 def test_waypoint_classifier_mode_hint():
     wp = Waypoint(name="Station", lat=40.75, lon=-74.00, radius_m=500, mode_hint="train")
     c = WaypointClassifier(waypoints=[wp])
-    df = pl.DataFrame({
-        "lat": [40.75, 40.80],
-        "lon": [-74.00, -73.95],
-    })
+    df = pl.DataFrame(
+        {
+            "lat": [40.75, 40.80],
+            "lon": [-74.00, -73.95],
+        }
+    )
     scores = c.score(df)
     assert scores[0].train == 1.0  # inside waypoint
     assert scores[1].train == 0.0  # outside waypoint
@@ -141,10 +167,12 @@ def test_waypoint_classifier_no_hint():
 def test_waypoint_boundaries():
     wp = Waypoint(name="Station", lat=40.75, lon=-74.00, radius_m=100)
     c = WaypointClassifier(waypoints=[wp])
-    df = pl.DataFrame({
-        "lat": [40.80, 40.80, 40.75, 40.75, 40.80],
-        "lon": [-73.95, -73.95, -74.00, -74.00, -73.95],
-    })
+    df = pl.DataFrame(
+        {
+            "lat": [40.80, 40.80, 40.75, 40.75, 40.80],
+            "lon": [-73.95, -73.95, -74.00, -74.00, -73.95],
+        }
+    )
     boundaries = c.get_boundary_indices(df)
     assert 2 in boundaries  # entering waypoint zone
     assert 4 in boundaries  # leaving waypoint zone
@@ -163,6 +191,7 @@ def test_waypoint_roundtrip():
 
 
 # --- CorridorClassifier ---
+
 
 def test_corridor_contains_point_on_line():
     c = Corridor(
@@ -194,10 +223,12 @@ def test_corridor_classifier_scores():
         buffer_m=500,
     )
     c = CorridorClassifier(corridors=[corridor])
-    df = pl.DataFrame({
-        "lat": [40.80, 41.00],
-        "lon": [-73.975, -73.80],
-    })
+    df = pl.DataFrame(
+        {
+            "lat": [40.80, 41.00],
+            "lon": [-73.975, -73.80],
+        }
+    )
     scores = c.score(df)
     assert scores[0].train > 0.0  # near corridor
     assert scores[1].train == 0.0  # far from corridor
@@ -211,10 +242,12 @@ def test_corridor_confidence_scales_with_distance():
         buffer_m=1000,
     )
     c = CorridorClassifier(corridors=[corridor])
-    df = pl.DataFrame({
-        "lat": [40.75, 40.752],  # exact center vs slightly off
-        "lon": [-74.00, -74.00],
-    })
+    df = pl.DataFrame(
+        {
+            "lat": [40.75, 40.752],  # exact center vs slightly off
+            "lon": [-74.00, -74.00],
+        }
+    )
     scores = c.score(df)
     assert scores[0].train > scores[1].train  # closer = higher confidence
 
@@ -233,6 +266,7 @@ def test_corridor_from_dict():
 
 
 # --- EnsembleClassifier ---
+
 
 def test_ensemble_zero_config():
     ens = build_ensemble(zones_config=None)
@@ -276,13 +310,15 @@ def test_ensemble_full_config():
 
 def test_ensemble_classify_basic():
     ens = build_ensemble(zones_config=None)
-    df = pl.DataFrame({
-        "speed_kmh": [0.0, 4.0, 20.0, 60.0],
-        "lat": [40.0, 40.0, 40.0, 40.0],
-        "lon": [-74.0, -74.0, -74.0, -74.0],
-        "time_delta_s": [0.0, 10.0, 10.0, 10.0],
-        "timestamp": [1000, 1010, 1020, 1030],
-    })
+    df = pl.DataFrame(
+        {
+            "speed_kmh": [0.0, 4.0, 20.0, 60.0],
+            "lat": [40.0, 40.0, 40.0, 40.0],
+            "lon": [-74.0, -74.0, -74.0, -74.0],
+            "time_delta_s": [0.0, 10.0, 10.0, 10.0],
+            "timestamp": [1000, 1010, 1020, 1030],
+        }
+    )
     modes = ens.classify(df)
     assert modes[0] == "stationary"
     assert modes[1] == "walking"
@@ -292,13 +328,15 @@ def test_ensemble_classify_basic():
 
 def test_ensemble_classify_with_confidence():
     ens = build_ensemble(zones_config=None)
-    df = pl.DataFrame({
-        "speed_kmh": [0.0, 60.0],
-        "lat": [40.0, 40.0],
-        "lon": [-74.0, -74.0],
-        "time_delta_s": [0.0, 10.0],
-        "timestamp": [1000, 1010],
-    })
+    df = pl.DataFrame(
+        {
+            "speed_kmh": [0.0, 60.0],
+            "lat": [40.0, 40.0],
+            "lon": [-74.0, -74.0],
+            "time_delta_s": [0.0, 10.0],
+            "timestamp": [1000, 1010],
+        }
+    )
     results = ens.classify_with_confidence(df)
     assert len(results) == 2
     assert results[0][0] == "stationary"
@@ -320,13 +358,15 @@ def test_ensemble_waypoint_overrides_speed():
     }
     ens = build_ensemble(zones_config=config)
     # Point at low speed (normally "walking") but inside train station waypoint
-    df = pl.DataFrame({
-        "speed_kmh": [3.0],
-        "lat": [40.75],
-        "lon": [-74.00],
-        "time_delta_s": [10.0],
-        "timestamp": [1000],
-    })
+    df = pl.DataFrame(
+        {
+            "speed_kmh": [3.0],
+            "lat": [40.75],
+            "lon": [-74.00],
+            "time_delta_s": [10.0],
+            "timestamp": [1000],
+        }
+    )
     modes = ens.classify(df)
     # Waypoint (weight 1.5) + speed (weight 1.0 for walking) -- train should win
     # waypoint gives train=1.5, speed gives walking=1.0
@@ -334,6 +374,7 @@ def test_ensemble_waypoint_overrides_speed():
 
 
 # --- Config loading ---
+
 
 def test_load_zones_config_from_file(tmp_path):
     config_file = tmp_path / "zones.json"

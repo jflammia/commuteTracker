@@ -174,6 +174,7 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
 
     # Load label corrections from the same database
     from src.storage.label_store import LabelStore
+
     label_store = LabelStore(db)
     corrections = label_store.get_corrections_map() or None
 

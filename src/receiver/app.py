@@ -74,7 +74,9 @@ async def lifespan(app: FastAPI):
 
     db = Database(DATABASE_URL)
     db.create_tables()
-    logger.info(f"Database ready: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
+    logger.info(
+        f"Database ready: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}"
+    )
 
     # Initialize S3 sync (optional)
     if S3_ENDPOINT_URL:
@@ -84,7 +86,11 @@ async def lifespan(app: FastAPI):
         )
         if s3_sync.ensure_bucket():
             sync_task = asyncio.create_task(_periodic_s3_sync())
-            prune_status = f"pruning after {LOCAL_RETENTION_DAYS}d" if LOCAL_RETENTION_DAYS > 0 else "no pruning"
+            prune_status = (
+                f"pruning after {LOCAL_RETENTION_DAYS}d"
+                if LOCAL_RETENTION_DAYS > 0
+                else "no pruning"
+            )
             logger.info(
                 f"S3 sync enabled: {S3_ENDPOINT_URL}/{S3_BUCKET} "
                 f"every {S3_SYNC_INTERVAL_SECONDS}s ({prune_status})"
@@ -113,10 +119,9 @@ async def lifespan(app: FastAPI):
     # Mount MCP server
     try:
         from src.mcp_server import mcp as mcp_server, set_service as set_mcp_service
+
         set_mcp_service(service)
-        app.routes.append(
-            Mount("/mcp", app=mcp_server.streamable_http_app())
-        )
+        app.routes.append(Mount("/mcp", app=mcp_server.streamable_http_app()))
         logger.info("MCP server mounted at /mcp")
     except ImportError:
         logger.warning("MCP server not available (mcp package not installed)")
@@ -191,9 +196,7 @@ async def receive_location(
         record_id = db.insert_record(payload, user=x_limit_u, device=x_limit_d)
 
         msg_type = payload.get("_type", "unknown")
-        logger.info(
-            f"Received {msg_type} from {x_limit_u}/{x_limit_d} (id={record_id})"
-        )
+        logger.info(f"Received {msg_type} from {x_limit_u}/{x_limit_d} (id={record_id})")
 
         # Forward to Recorder (fire-and-forget)
         if RECORDER_URL:

@@ -37,8 +37,12 @@ def detect_commutes(
     lons = df["lon"].to_list()
     timestamps = df["timestamp"].to_list()
 
-    at_home = [in_geofence(lat, lon, home_lat, home_lon, home_radius_m) for lat, lon in zip(lats, lons)]
-    at_work = [in_geofence(lat, lon, work_lat, work_lon, work_radius_m) for lat, lon in zip(lats, lons)]
+    at_home = [
+        in_geofence(lat, lon, home_lat, home_lon, home_radius_m) for lat, lon in zip(lats, lons)
+    ]
+    at_work = [
+        in_geofence(lat, lon, work_lat, work_lon, work_radius_m) for lat, lon in zip(lats, lons)
+    ]
 
     commute_ids: list[str | None] = [None] * len(lats)
     commute_directions: list[str | None] = [None] * len(lats)

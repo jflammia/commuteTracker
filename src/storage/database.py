@@ -65,12 +65,8 @@ class Database:
         # Enable WAL mode for SQLite
         if database_url.startswith("sqlite"):
             with self._engine.connect() as conn:
-                conn.execute(
-                    __import__("sqlalchemy").text("PRAGMA journal_mode=WAL")
-                )
-                conn.execute(
-                    __import__("sqlalchemy").text("PRAGMA synchronous=NORMAL")
-                )
+                conn.execute(__import__("sqlalchemy").text("PRAGMA journal_mode=WAL"))
+                conn.execute(__import__("sqlalchemy").text("PRAGMA synchronous=NORMAL"))
                 conn.commit()
 
     def create_tables(self):
@@ -111,9 +107,7 @@ class Database:
             return
         now = datetime.now(timezone.utc)
         with self.session() as session:
-            session.query(LocationRecord).filter(
-                LocationRecord.id.in_(record_ids)
-            ).update(
+            session.query(LocationRecord).filter(LocationRecord.id.in_(record_ids)).update(
                 {LocationRecord.s3_synced_at: now},
                 synchronize_session=False,
             )
@@ -127,9 +121,7 @@ class Database:
         if retention_days <= 0:
             return 0
 
-        cutoff = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         cutoff = cutoff.__class__(
             cutoff.year,
             cutoff.month,
@@ -159,7 +151,5 @@ class Database:
     def count_unsynced(self) -> int:
         with self.session() as session:
             return (
-                session.query(LocationRecord)
-                .filter(LocationRecord.s3_synced_at.is_(None))
-                .count()
+                session.query(LocationRecord).filter(LocationRecord.s3_synced_at.is_(None)).count()
             )

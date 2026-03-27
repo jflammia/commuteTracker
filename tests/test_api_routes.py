@@ -56,13 +56,16 @@ def test_api_raw_stats(client):
 
 
 def test_api_add_and_list_labels(client):
-    resp = client.post("/api/v1/labels", json={
-        "commute_id": "test_001",
-        "segment_id": 0,
-        "original_mode": "driving",
-        "corrected_mode": "train",
-        "notes": "test",
-    })
+    resp = client.post(
+        "/api/v1/labels",
+        json={
+            "commute_id": "test_001",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+            "notes": "test",
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["corrected_mode"] == "train"
 
@@ -72,12 +75,15 @@ def test_api_add_and_list_labels(client):
 
 
 def test_api_labels_filter(client):
-    client.post("/api/v1/labels", json={
-        "commute_id": "c1",
-        "segment_id": 0,
-        "original_mode": "driving",
-        "corrected_mode": "train",
-    })
+    client.post(
+        "/api/v1/labels",
+        json={
+            "commute_id": "c1",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+        },
+    )
     resp = client.get("/api/v1/labels?commute_id=c1")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
@@ -93,11 +99,14 @@ def test_api_export_labels(client):
 
 
 def test_api_rebuild_dry_run(client):
-    resp = client.post("/api/v1/rebuild", json={
-        "since": "2026-01-01",
-        "until": "2026-01-31",
-        "dry_run": True,
-    })
+    resp = client.post(
+        "/api/v1/rebuild",
+        json={
+            "since": "2026-01-01",
+            "until": "2026-01-31",
+            "dry_run": True,
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["dry_run"] is True
 
@@ -136,8 +145,18 @@ def test_api_corrections_empty(client):
 
 def test_api_bulk_labels(client):
     labels = [
-        {"commute_id": "c1", "segment_id": 0, "original_mode": "driving", "corrected_mode": "train"},
-        {"commute_id": "c1", "segment_id": 1, "original_mode": "stationary", "corrected_mode": "waiting"},
+        {
+            "commute_id": "c1",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+        },
+        {
+            "commute_id": "c1",
+            "segment_id": 1,
+            "original_mode": "stationary",
+            "corrected_mode": "waiting",
+        },
     ]
     resp = client.post("/api/v1/labels/bulk", json=labels)
     assert resp.status_code == 200
@@ -169,10 +188,13 @@ def test_api_review_recent_no_data(client):
 
 
 def test_api_apply_corrections_empty(client):
-    resp = client.post("/api/v1/labels/apply", json={
-        "corrections": [],
-        "min_confidence": 0.7,
-    })
+    resp = client.post(
+        "/api/v1/labels/apply",
+        json={
+            "corrections": [],
+            "min_confidence": 0.7,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["applied_count"] == 0
@@ -180,25 +202,28 @@ def test_api_apply_corrections_empty(client):
 
 
 def test_api_apply_corrections_with_threshold(client):
-    resp = client.post("/api/v1/labels/apply", json={
-        "corrections": [
-            {
-                "commute_id": "c1",
-                "segment_id": 0,
-                "original_mode": "driving",
-                "corrected_mode": "train",
-                "confidence": 0.9,
-            },
-            {
-                "commute_id": "c1",
-                "segment_id": 1,
-                "original_mode": "stationary",
-                "corrected_mode": "waiting",
-                "confidence": 0.4,
-            },
-        ],
-        "min_confidence": 0.7,
-    })
+    resp = client.post(
+        "/api/v1/labels/apply",
+        json={
+            "corrections": [
+                {
+                    "commute_id": "c1",
+                    "segment_id": 0,
+                    "original_mode": "driving",
+                    "corrected_mode": "train",
+                    "confidence": 0.9,
+                },
+                {
+                    "commute_id": "c1",
+                    "segment_id": 1,
+                    "original_mode": "stationary",
+                    "corrected_mode": "waiting",
+                    "confidence": 0.4,
+                },
+            ],
+            "min_confidence": 0.7,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["applied_count"] == 1

@@ -29,9 +29,14 @@ if selected_direction != "All":
 # --- Duration Over Time with Rolling Average ---
 st.subheader("Commute Duration Over Time")
 
-time_df = commutes.sort("start_time").select([
-    "start_time", "duration_min", "commute_direction", "date",
-])
+time_df = commutes.sort("start_time").select(
+    [
+        "start_time",
+        "duration_min",
+        "commute_direction",
+        "date",
+    ]
+)
 
 # Compute rolling average
 window_size = st.sidebar.slider("Rolling average window", 3, 20, 7)
@@ -67,13 +72,17 @@ commutes_weekly = commutes.with_columns(
     pl.col("date").dt.truncate("1w").alias("week_start"),
 )
 
-weekly = commutes_weekly.group_by("week_start").agg(
-    pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
-    pl.col("duration_min").min().round(1).alias("min_duration_min"),
-    pl.col("duration_min").max().round(1).alias("max_duration_min"),
-    pl.col("commute_id").count().alias("num_commutes"),
-    pl.col("total_distance_m").mean().round(0).alias("avg_distance_m"),
-).sort("week_start")
+weekly = (
+    commutes_weekly.group_by("week_start")
+    .agg(
+        pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
+        pl.col("duration_min").min().round(1).alias("min_duration_min"),
+        pl.col("duration_min").max().round(1).alias("max_duration_min"),
+        pl.col("commute_id").count().alias("num_commutes"),
+        pl.col("total_distance_m").mean().round(0).alias("avg_distance_m"),
+    )
+    .sort("week_start")
+)
 
 if not weekly.is_empty():
     weekly_data = weekly.to_pandas()
@@ -94,8 +103,13 @@ if not weekly.is_empty():
         .encode(
             x=alt.X("week_start:T"),
             y=alt.Y("avg_duration_min:Q"),
-            tooltip=["week_start", "avg_duration_min", "min_duration_min",
-                      "max_duration_min", "num_commutes"],
+            tooltip=[
+                "week_start",
+                "avg_duration_min",
+                "min_duration_min",
+                "max_duration_min",
+                "num_commutes",
+            ],
         )
     )
 
@@ -121,9 +135,13 @@ if all_segments:
     seg_df = pl.concat(all_segments)
 
     # Time per mode per commute
-    mode_time = seg_df.group_by(["date", "transport_mode"]).agg(
-        pl.col("duration_min").sum().round(1).alias("total_min"),
-    ).sort("date")
+    mode_time = (
+        seg_df.group_by(["date", "transport_mode"])
+        .agg(
+            pl.col("duration_min").sum().round(1).alias("total_min"),
+        )
+        .sort("date")
+    )
 
     mode_data = mode_time.to_pandas()
 
@@ -179,11 +197,15 @@ commutes = commutes.with_columns(
     .alias("day_name"),
 )
 
-dow = commutes.group_by(["day_of_week", "day_name"]).agg(
-    pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
-    pl.col("duration_min").std().round(1).alias("stddev_min"),
-    pl.col("commute_id").count().alias("count"),
-).sort("day_of_week")
+dow = (
+    commutes.group_by(["day_of_week", "day_name"])
+    .agg(
+        pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
+        pl.col("duration_min").std().round(1).alias("stddev_min"),
+        pl.col("commute_id").count().alias("count"),
+    )
+    .sort("day_of_week")
+)
 
 if not dow.is_empty():
     dow_data = dow.to_pandas()

@@ -6,7 +6,7 @@ from src.processing.commute_detector import detect_commutes
 from src.processing.enricher import enrich
 
 # Geofences for testing
-HOME = (40.75, -74.00, 200)   # lat, lon, radius_m
+HOME = (40.75, -74.00, 200)  # lat, lon, radius_m
 WORK = (40.85, -73.95, 200)
 
 
@@ -16,20 +16,24 @@ def _detect(rows: list[dict]) -> pl.DataFrame:
     df = enrich(df)
     return detect_commutes(
         df,
-        home_lat=HOME[0], home_lon=HOME[1], home_radius_m=HOME[2],
-        work_lat=WORK[0], work_lon=WORK[1], work_radius_m=WORK[2],
+        home_lat=HOME[0],
+        home_lon=HOME[1],
+        home_radius_m=HOME[2],
+        work_lat=WORK[0],
+        work_lon=WORK[1],
+        work_radius_m=WORK[2],
     )
 
 
 def test_morning_commute_detected():
     """Home -> midpoint -> work should be labeled as morning commute."""
     rows = [
-        {"lat": 40.750, "lon": -74.000, "tst": 1000},   # at home
-        {"lat": 40.750, "lon": -74.000, "tst": 1010},   # still at home
-        {"lat": 40.770, "lon": -73.990, "tst": 1020},   # left home
-        {"lat": 40.800, "lon": -73.970, "tst": 1030},   # in transit
-        {"lat": 40.830, "lon": -73.960, "tst": 1040},   # in transit
-        {"lat": 40.850, "lon": -73.950, "tst": 1050},   # at work
+        {"lat": 40.750, "lon": -74.000, "tst": 1000},  # at home
+        {"lat": 40.750, "lon": -74.000, "tst": 1010},  # still at home
+        {"lat": 40.770, "lon": -73.990, "tst": 1020},  # left home
+        {"lat": 40.800, "lon": -73.970, "tst": 1030},  # in transit
+        {"lat": 40.830, "lon": -73.960, "tst": 1040},  # in transit
+        {"lat": 40.850, "lon": -73.950, "tst": 1050},  # at work
     ]
     result = _detect(rows)
 
@@ -46,12 +50,12 @@ def test_morning_commute_detected():
 def test_evening_commute_detected():
     """Work -> midpoint -> home should be labeled as evening commute."""
     rows = [
-        {"lat": 40.850, "lon": -73.950, "tst": 1000},   # at work
-        {"lat": 40.850, "lon": -73.950, "tst": 1010},   # still at work
-        {"lat": 40.830, "lon": -73.960, "tst": 1020},   # left work
-        {"lat": 40.800, "lon": -73.970, "tst": 1030},   # in transit
-        {"lat": 40.770, "lon": -73.990, "tst": 1040},   # in transit
-        {"lat": 40.750, "lon": -74.000, "tst": 1050},   # at home
+        {"lat": 40.850, "lon": -73.950, "tst": 1000},  # at work
+        {"lat": 40.850, "lon": -73.950, "tst": 1010},  # still at work
+        {"lat": 40.830, "lon": -73.960, "tst": 1020},  # left work
+        {"lat": 40.800, "lon": -73.970, "tst": 1030},  # in transit
+        {"lat": 40.770, "lon": -73.990, "tst": 1040},  # in transit
+        {"lat": 40.750, "lon": -74.000, "tst": 1050},  # at home
     ]
     result = _detect(rows)
 
@@ -76,11 +80,11 @@ def test_no_commute_when_staying_home():
 def test_return_to_origin_cancels_commute():
     """Leaving home then returning without reaching work should not be a commute."""
     rows = [
-        {"lat": 40.750, "lon": -74.000, "tst": 1000},   # at home
-        {"lat": 40.750, "lon": -74.000, "tst": 1010},   # at home
-        {"lat": 40.770, "lon": -73.990, "tst": 1020},   # left home
-        {"lat": 40.780, "lon": -73.985, "tst": 1030},   # in transit
-        {"lat": 40.750, "lon": -74.000, "tst": 1040},   # back home
+        {"lat": 40.750, "lon": -74.000, "tst": 1000},  # at home
+        {"lat": 40.750, "lon": -74.000, "tst": 1010},  # at home
+        {"lat": 40.770, "lon": -73.990, "tst": 1020},  # left home
+        {"lat": 40.780, "lon": -73.985, "tst": 1030},  # in transit
+        {"lat": 40.750, "lon": -74.000, "tst": 1040},  # back home
     ]
     result = _detect(rows)
     assert result["commute_id"].null_count() == len(result)
@@ -90,15 +94,15 @@ def test_round_trip_both_detected():
     """Home -> work -> home should detect both morning and evening commutes."""
     rows = [
         # Morning
-        {"lat": 40.750, "lon": -74.000, "tst": 1000},   # home
-        {"lat": 40.750, "lon": -74.000, "tst": 1010},   # home
-        {"lat": 40.800, "lon": -73.970, "tst": 1020},   # transit
-        {"lat": 40.850, "lon": -73.950, "tst": 1030},   # work
+        {"lat": 40.750, "lon": -74.000, "tst": 1000},  # home
+        {"lat": 40.750, "lon": -74.000, "tst": 1010},  # home
+        {"lat": 40.800, "lon": -73.970, "tst": 1020},  # transit
+        {"lat": 40.850, "lon": -73.950, "tst": 1030},  # work
         # Stay at work
-        {"lat": 40.850, "lon": -73.950, "tst": 1040},   # work
+        {"lat": 40.850, "lon": -73.950, "tst": 1040},  # work
         # Evening
-        {"lat": 40.800, "lon": -73.970, "tst": 1050},   # transit
-        {"lat": 40.750, "lon": -74.000, "tst": 1060},   # home
+        {"lat": 40.800, "lon": -73.970, "tst": 1050},  # transit
+        {"lat": 40.750, "lon": -74.000, "tst": 1060},  # home
     ]
     result = _detect(rows)
 
@@ -110,9 +114,9 @@ def test_round_trip_both_detected():
 def test_at_home_at_work_flags():
     """Points at home/work should have correct boolean flags."""
     rows = [
-        {"lat": 40.750, "lon": -74.000, "tst": 1000},   # home
-        {"lat": 40.800, "lon": -73.970, "tst": 1010},   # neither
-        {"lat": 40.850, "lon": -73.950, "tst": 1020},   # work
+        {"lat": 40.750, "lon": -74.000, "tst": 1000},  # home
+        {"lat": 40.800, "lon": -73.970, "tst": 1010},  # neither
+        {"lat": 40.850, "lon": -73.950, "tst": 1020},  # work
     ]
     result = _detect(rows)
     assert result["at_home"][0] is True
@@ -126,7 +130,7 @@ def test_at_home_at_work_flags():
 def test_commute_id_format():
     """Commute ID should be in YYYY-MM-DD-direction format."""
     rows = [
-        {"lat": 40.750, "lon": -74.000, "tst": 1711440000},   # 2024-03-26
+        {"lat": 40.750, "lon": -74.000, "tst": 1711440000},  # 2024-03-26
         {"lat": 40.750, "lon": -74.000, "tst": 1711440010},
         {"lat": 40.800, "lon": -73.970, "tst": 1711440020},
         {"lat": 40.850, "lon": -73.950, "tst": 1711440030},

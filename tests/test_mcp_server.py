@@ -5,16 +5,17 @@ tools, resources, and prompts.
 """
 
 
-
 def test_mcp_server_imports():
     """MCP server module imports without error."""
     from src.mcp_server import mcp
+
     assert mcp.name == "Commute Tracker"
 
 
 def test_mcp_has_tools():
     """MCP server has all expected tools registered."""
     from src.mcp_server import mcp
+
     tool_names = {name for name in mcp._tool_manager._tools}
     expected = {
         "query_commute_data",
@@ -35,6 +36,7 @@ def test_mcp_has_tools():
 def test_mcp_has_resources():
     """MCP server has resource templates and static resources registered."""
     from src.mcp_server import mcp
+
     resource_count = len(mcp._resource_manager._resources) + len(mcp._resource_manager._templates)
     # We have 5 static resources + 6 templates = 11 total
     assert resource_count >= 10, f"Expected at least 10 resources, got {resource_count}"
@@ -43,6 +45,7 @@ def test_mcp_has_resources():
 def test_mcp_has_prompts():
     """MCP server has prompts registered."""
     from src.mcp_server import mcp
+
     prompt_names = set(mcp._prompt_manager._prompts.keys())
     expected = {
         "analyze_commute",
@@ -56,6 +59,7 @@ def test_mcp_has_prompts():
 def test_mcp_stateless_config():
     """MCP server is configured for stateless HTTP."""
     from src.mcp_server import mcp
+
     # The server should have stateless_http and json_response set
     assert mcp.settings.stateless_http is True
     assert mcp.settings.json_response is True

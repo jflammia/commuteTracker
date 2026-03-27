@@ -13,7 +13,11 @@ from __future__ import annotations
 
 import polars as pl
 
-from src.processing.classifiers.ensemble import EnsembleClassifier, build_ensemble, load_zones_config
+from src.processing.classifiers.ensemble import (
+    EnsembleClassifier,
+    build_ensemble,
+    load_zones_config,
+)
 
 
 # Minimum segment duration to keep (seconds)
@@ -40,12 +44,14 @@ def reset_ensemble() -> None:
 
 # --- Keep legacy function for backward compatibility with existing tests ---
 
+
 def classify_transport_mode(speed_kmh: float) -> str:
     """Classify a single point's transport mode by speed.
 
     Legacy convenience function. For batch classification, use the ensemble.
     """
     from src.processing.classifiers.speed import SpeedClassifier
+
     _speed = SpeedClassifier()
     scores = _speed.score(pl.DataFrame({"speed_kmh": [speed_kmh]}))
     return scores[0].winner()
@@ -185,9 +191,7 @@ def segment_commute(
     segment_ids = _assign_segment_ids(modes, waypoint_boundaries)
 
     # Merge short segments (protecting waypoint boundaries)
-    modes, segment_ids = _merge_short_segments(
-        modes, segment_ids, time_deltas, waypoint_boundaries
-    )
+    modes, segment_ids = _merge_short_segments(modes, segment_ids, time_deltas, waypoint_boundaries)
 
     # Detect waiting: stationary segments between different moving modes
     modes, segment_ids = _detect_waiting(modes, segment_ids)
@@ -256,13 +260,10 @@ def _detect_waiting(
         # Reclassify as waiting if between different moving modes,
         # or at the start/end of a commute adjacent to a moving mode
         is_transfer = (
-            prev_moving is not None
-            and next_moving is not None
-            and prev_moving != next_moving
+            prev_moving is not None and next_moving is not None and prev_moving != next_moving
         )
-        is_edge_wait = (
-            (prev_moving is None and next_moving is not None)
-            or (prev_moving is not None and next_moving is None)
+        is_edge_wait = (prev_moving is None and next_moving is not None) or (
+            prev_moving is not None and next_moving is None
         )
 
         if is_transfer or is_edge_wait:

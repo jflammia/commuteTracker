@@ -60,9 +60,15 @@ col4.metric("Worst Commute", f"{commutes['duration_min'].max():.1f} min")
 # --- Scatter: Departure Time vs Duration ---
 st.subheader("Departure Time vs Duration")
 
-scatter_data = commutes.select([
-    "departure_time_decimal", "duration_min", "commute_direction", "date", "day_name",
-]).to_pandas()
+scatter_data = commutes.select(
+    [
+        "departure_time_decimal",
+        "duration_min",
+        "commute_direction",
+        "date",
+        "day_name",
+    ]
+).to_pandas()
 
 scatter = (
     alt.Chart(scatter_data)
@@ -71,10 +77,12 @@ scatter = (
         x=alt.X(
             "departure_time_decimal:Q",
             title="Departure Time (hour)",
-            scale=alt.Scale(domain=[
-                scatter_data["departure_time_decimal"].min() - 0.5,
-                scatter_data["departure_time_decimal"].max() + 0.5,
-            ]),
+            scale=alt.Scale(
+                domain=[
+                    scatter_data["departure_time_decimal"].min() - 0.5,
+                    scatter_data["departure_time_decimal"].max() + 0.5,
+                ]
+            ),
         ),
         y=alt.Y("duration_min:Q", title="Duration (min)"),
         color=alt.Color("commute_direction:N", title="Direction"),
@@ -84,20 +92,24 @@ scatter = (
 )
 
 # Add LOESS trend line
-trend = scatter.transform_loess(
-    "departure_time_decimal", "duration_min", bandwidth=0.4
-).mark_line(strokeWidth=3, opacity=0.6)
+trend = scatter.transform_loess("departure_time_decimal", "duration_min", bandwidth=0.4).mark_line(
+    strokeWidth=3, opacity=0.6
+)
 
 st.altair_chart(scatter + trend, use_container_width=True)
 
 # --- Hourly Average ---
 st.subheader("Average Duration by Departure Hour")
 
-hourly = commutes.group_by("departure_hour").agg(
-    pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
-    pl.col("duration_min").std().round(1).alias("stddev_min"),
-    pl.col("duration_min").count().alias("count"),
-).sort("departure_hour")
+hourly = (
+    commutes.group_by("departure_hour")
+    .agg(
+        pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
+        pl.col("duration_min").std().round(1).alias("stddev_min"),
+        pl.col("duration_min").count().alias("count"),
+    )
+    .sort("departure_hour")
+)
 
 if not hourly.is_empty():
     hourly_data = hourly.to_pandas()
@@ -129,9 +141,14 @@ if not hourly.is_empty():
 st.subheader("Duration by Day of Week & Hour")
 
 if len(commutes) >= 3:
-    heatmap_data = commutes.group_by(["day_of_week", "day_name", "departure_hour"]).agg(
-        pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
-    ).sort("day_of_week", "departure_hour").to_pandas()
+    heatmap_data = (
+        commutes.group_by(["day_of_week", "day_name", "departure_hour"])
+        .agg(
+            pl.col("duration_min").mean().round(1).alias("avg_duration_min"),
+        )
+        .sort("day_of_week", "departure_hour")
+        .to_pandas()
+    )
 
     if not heatmap_data.empty:
         heatmap = (
@@ -172,8 +189,20 @@ if not hourly.is_empty() and len(hourly) >= 2:
 
 # --- Commute History Table ---
 with st.expander("All Commutes"):
-    display_df = commutes.select([
-        "date", "day_name", "commute_direction", "departure_hour",
-        "departure_minute", "duration_min", "total_distance_m", "point_count",
-    ]).sort("date", descending=True).to_pandas()
+    display_df = (
+        commutes.select(
+            [
+                "date",
+                "day_name",
+                "commute_direction",
+                "departure_hour",
+                "departure_minute",
+                "duration_min",
+                "total_distance_m",
+                "point_count",
+            ]
+        )
+        .sort("date", descending=True)
+        .to_pandas()
+    )
     st.dataframe(display_df, use_container_width=True, hide_index=True)

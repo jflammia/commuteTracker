@@ -16,7 +16,12 @@ from pathlib import Path
 def day_file_path(base_dir: str | Path, date: datetime) -> Path:
     """Return the JSONL file path for a given date."""
     base = Path(base_dir)
-    return base / f"{date.year}" / f"{date.month:02d}" / f"{date.year}-{date.month:02d}-{date.day:02d}.jsonl"
+    return (
+        base
+        / f"{date.year}"
+        / f"{date.month:02d}"
+        / f"{date.year}-{date.month:02d}-{date.day:02d}.jsonl"
+    )
 
 
 def append_record(base_dir: str | Path, record: dict) -> Path:

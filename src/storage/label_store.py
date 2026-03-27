@@ -109,9 +109,7 @@ class LabelStore:
             query = session.query(SegmentLabelRecord)
             if commute_id:
                 query = query.filter(SegmentLabelRecord.commute_id == commute_id)
-            query = query.order_by(
-                SegmentLabelRecord.commute_id, SegmentLabelRecord.segment_id
-            )
+            query = query.order_by(SegmentLabelRecord.commute_id, SegmentLabelRecord.segment_id)
             return [SegmentLabel.from_record(r) for r in query.all()]
 
     def get_corrections_map(self) -> dict[tuple[str, int], str]:
@@ -120,10 +118,7 @@ class LabelStore:
         Useful for applying corrections during re-processing.
         """
         labels = self.get_labels()
-        return {
-            (lb.commute_id, lb.segment_id): lb.corrected_mode
-            for lb in labels
-        }
+        return {(lb.commute_id, lb.segment_id): lb.corrected_mode for lb in labels}
 
     def label_count(self) -> int:
         with self._db.session() as session:

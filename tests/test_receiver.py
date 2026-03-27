@@ -21,6 +21,7 @@ def client(db, monkeypatch):
     monkeypatch.setattr("src.receiver.app.db", db)
     monkeypatch.setattr("src.receiver.app.RECORDER_URL", "")
     from src.receiver.app import app
+
     return TestClient(app)
 
 

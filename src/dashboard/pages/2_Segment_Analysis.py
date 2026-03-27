@@ -43,7 +43,9 @@ if selected_direction != "All":
 
 # --- Segment Duration Over Time ---
 st.subheader("Segment Duration Over Time")
-st.markdown("Each line represents a transport mode segment. Track how long each leg takes day to day.")
+st.markdown(
+    "Each line represents a transport mode segment. Track how long each leg takes day to day."
+)
 
 # For a meaningful time-series, group by date + segment_id + transport_mode
 duration_chart_data = seg_df.select(
@@ -53,8 +55,11 @@ duration_chart_data = seg_df.select(
 if not duration_chart_data.empty:
     # Create a label for each segment
     duration_chart_data["segment_label"] = (
-        "Seg " + duration_chart_data["segment_id"].astype(str)
-        + " (" + duration_chart_data["transport_mode"] + ")"
+        "Seg "
+        + duration_chart_data["segment_id"].astype(str)
+        + " ("
+        + duration_chart_data["transport_mode"]
+        + ")"
     )
 
     chart = (
@@ -97,9 +102,7 @@ variability = seg_df.group_by("transport_mode").agg(
 if not variability.is_empty():
     # Add coefficient of variation
     variability = variability.with_columns(
-        (pl.col("stddev_min") / pl.col("avg_duration_min") * 100)
-        .round(1)
-        .alias("cv_pct"),
+        (pl.col("stddev_min") / pl.col("avg_duration_min") * 100).round(1).alias("cv_pct"),
     )
     variability = variability.sort("avg_duration_min", descending=True)
 
@@ -155,10 +158,21 @@ if not box_data.empty:
 # --- Detailed Segment Table ---
 with st.expander("Raw Segment Data"):
     st.dataframe(
-        seg_df.select([
-            "date", "direction", "commute_id", "segment_id",
-            "transport_mode", "duration_min", "distance_m", "avg_speed_kmh", "max_speed_kmh",
-        ]).sort("date", "commute_id", "segment_id").to_pandas(),
+        seg_df.select(
+            [
+                "date",
+                "direction",
+                "commute_id",
+                "segment_id",
+                "transport_mode",
+                "duration_min",
+                "distance_m",
+                "avg_speed_kmh",
+                "max_speed_kmh",
+            ]
+        )
+        .sort("date", "commute_id", "segment_id")
+        .to_pandas(),
         use_container_width=True,
         hide_index=True,
     )

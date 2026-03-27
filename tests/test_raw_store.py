@@ -1,6 +1,5 @@
 """Tests for raw JSONL storage."""
 
-
 from src.storage.raw_store import (
     append_record,
     read_day_file,
@@ -24,7 +23,9 @@ def test_append_and_read(tmp_path):
 
 def test_append_multiple(tmp_path):
     for i in range(5):
-        append_record(tmp_path, {"lat": 40.75 + i * 0.001, "lon": -74.0, "tst": 1711440000 + i * 10})
+        append_record(
+            tmp_path, {"lat": 40.75 + i * 0.001, "lon": -74.0, "tst": 1711440000 + i * 10}
+        )
 
     # Find the file that was created
     files = list(tmp_path.rglob("*.jsonl"))

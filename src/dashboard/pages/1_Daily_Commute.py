@@ -70,7 +70,9 @@ if "lat" in day_df.columns and "lon" in day_df.columns:
             if "segment_id" in one.columns:
                 for sid in one["segment_id"].unique().sort().to_list():
                     seg = one.filter(pl.col("segment_id") == sid)
-                    mode = seg["transport_mode"][0] if "transport_mode" in seg.columns else "unknown"
+                    mode = (
+                        seg["transport_mode"][0] if "transport_mode" in seg.columns else "unknown"
+                    )
                     color = MODE_COLORS.get(mode, "#7f8c8d")
                     coords = list(zip(seg["lat"].to_list(), seg["lon"].to_list()))
                     if len(coords) >= 2:
@@ -103,7 +105,9 @@ if "lat" in day_df.columns and "lon" in day_df.columns:
         # Legend
         legend_html = "<div style='position:fixed;bottom:30px;left:30px;z-index:1000;background:white;padding:10px;border-radius:5px;border:1px solid #ccc;font-size:13px;'>"
         for mode, color in MODE_COLORS.items():
-            legend_html += f"<div><span style='color:{color};font-size:16px;'>&#9644;</span> {mode}</div>"
+            legend_html += (
+                f"<div><span style='color:{color};font-size:16px;'>&#9644;</span> {mode}</div>"
+            )
         legend_html += "</div>"
         m.get_root().html.add_child(folium.Element(legend_html))
     else:

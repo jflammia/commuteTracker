@@ -51,25 +51,35 @@ class LabelRequest(BaseModel):
     )
     notes: str = Field("", examples=["Was on the express train, classifier confused by tunnel GPS"])
 
-    model_config = {"json_schema_extra": {"examples": [
-        {
-            "commute_id": "2026-03-26-morning",
-            "segment_id": 2,
-            "original_mode": "driving",
-            "corrected_mode": "train",
-            "notes": "Classifier confused by tunnel GPS jitter",
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "commute_id": "2026-03-26-morning",
+                    "segment_id": 2,
+                    "original_mode": "driving",
+                    "corrected_mode": "train",
+                    "notes": "Classifier confused by tunnel GPS jitter",
+                }
+            ]
         }
-    ]}}
+    }
 
 
 class RebuildRequest(BaseModel):
     """Parameters for rebuilding derived data from raw GPS records."""
 
-    since: str | None = Field(None, description="Start date inclusive (YYYY-MM-DD)", examples=["2026-03-01"])
-    until: str | None = Field(None, description="End date inclusive (YYYY-MM-DD)", examples=["2026-03-31"])
+    since: str | None = Field(
+        None, description="Start date inclusive (YYYY-MM-DD)", examples=["2026-03-01"]
+    )
+    until: str | None = Field(
+        None, description="End date inclusive (YYYY-MM-DD)", examples=["2026-03-31"]
+    )
     user: str | None = Field(None, description="Filter by OwnTracks user", examples=["jf"])
     device: str | None = Field(None, description="Filter by OwnTracks device", examples=["iphone"])
-    clean: bool = Field(False, description="Delete existing Parquet files in range before rebuilding")
+    clean: bool = Field(
+        False, description="Delete existing Parquet files in range before rebuilding"
+    )
     dry_run: bool = Field(False, description="Preview what would be rebuilt without writing files")
 
 
@@ -77,7 +87,9 @@ class TrainRequest(BaseModel):
     """Parameters for ML model training."""
 
     max_depth: int = Field(10, ge=1, le=50, description="Maximum depth of the decision tree")
-    test_fraction: float = Field(0.2, ge=0.0, le=0.5, description="Fraction of data held out for testing")
+    test_fraction: float = Field(
+        0.2, ge=0.0, le=0.5, description="Fraction of data held out for testing"
+    )
 
 
 class QueryRequest(BaseModel):
@@ -86,7 +98,9 @@ class QueryRequest(BaseModel):
     sql: str = Field(
         ...,
         description="SQL query using 'commute_data' as the table name. Powered by DuckDB.",
-        examples=["SELECT commute_id, avg(speed_kmh) as avg_speed FROM commute_data GROUP BY commute_id"],
+        examples=[
+            "SELECT commute_id, avg(speed_kmh) as avg_speed FROM commute_data GROUP BY commute_id"
+        ],
     )
 
 
@@ -339,7 +353,9 @@ def review_commute(commute_id: str):
 )
 def review_recent(
     n: int = Query(default=5, ge=1, le=50, description="Number of recent commutes to review"),
-    direction: str | None = Query(default=None, description="Filter by commute direction (e.g. to_work, to_home)"),
+    direction: str | None = Query(
+        default=None, description="Filter by commute direction (e.g. to_work, to_home)"
+    ),
 ):
     """Review recent commutes for systematic misclassification patterns.
 
