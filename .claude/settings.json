@@ -1,5 +1,12 @@
 {
   "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)",
+      "Bash(git checkout -- .)",
+      "Bash(git clean -f*)"
+    ],
     "allow": [
       "Bash(git *)",
       "Bash(gh *)",
@@ -46,6 +53,28 @@
           {
             "type": "command",
             "command": "bash -c 'cd \"$PROJECT_DIR\" && RUFF=\".venv/bin/ruff\"; [ ! -x \"$RUFF\" ] && RUFF=ruff; echo \"pre-push gate: checking lint...\" && \"$RUFF\" check src/ tests/ && echo \"pre-push gate: checking format...\" && \"$RUFF\" format --check src/ tests/ && echo \"pre-push gate: syncing with remote...\" && git pull --rebase --autostash || { echo \"BLOCKED: lint, format, or rebase failed. Fix before pushing.\"; exit 1; }'"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/worktree-setup.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/worktree-cleanup.sh",
+            "timeout": 10
           }
         ]
       }

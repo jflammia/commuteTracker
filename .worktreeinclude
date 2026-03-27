@@ -1,0 +1,2 @@
+# Files to copy into worktrees (uses .gitignore syntax)
+.claude/settings.local.json

@@ -97,13 +97,42 @@ gh pr merge <N> --merge --admin       # Merge a Release PR (regular merge, not s
 
 GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.yml` enforces conventional commits in PR titles. `release-please.yml` auto-creates a Release PR with changelog + version bump on each push to main. Merging the Release PR triggers `release.yml` which builds multi-arch (amd64+arm64) Docker image to GHCR. Use conventional commit prefixes in PR titles (`feat:`, `fix:`, `docs:`, etc.).
 
-## Commits & PRs
+## Git Workflow
 
-Use the `commit-pr` skill for all commits and PRs. Key rules:
+**Linear history only. No merge commits.**
+
+| Operation | Correct | Wrong |
+|-----------|---------|-------|
+| Update branch | `git rebase origin/main` | `git merge main` |
+| Pull changes | `git pull` (configured to rebase) | - |
+| Integrate to main | `git merge --ff-only <branch>` | `git merge <branch>` |
+
+Git config enforces this: `pull.rebase=true`, `merge.ff=only`. Run `bash .githooks/setup.sh` after cloning.
+
+Destructive operations are hard-blocked in `.claude/settings.json` (deny rules): force push, hard reset, checkout-dot, clean -f. These block even in bypass mode.
+
+### Task Lifecycle
+
+```
+/commit → push          (direct to main, simple changes)
+/pr                     (commit + push + open PR, for review)
+/clean_gone             (cleanup stale branches)
+```
+
+| Command | Source | Purpose |
+|---------|--------|---------|
+| `/commit` | commit-commands plugin | Stage and commit |
+| `/pr` | commit-commands plugin | Commit + push + create PR |
+| `/clean_gone` | commit-commands plugin | Remove stale branches |
+
+### Commits & PRs
+
 - **Conventional commits required**: `feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `style:`, `revert:`
-- **Never add AI attribution trailers** — no `Co-Authored-By: Claude`, `Signed-off-by`, or similar. Commits should look like any human-written commit.
+- **Never add AI attribution trailers** — no `Co-Authored-By: Claude`, `Signed-off-by`, or similar
 - **Squash merge** feature/fix PRs (PR title becomes the conventional commit release-please parses)
 - **Regular merge** release-please Release PRs (not squash — release-please needs its own commits intact)
+
+See `.claude/skills/commit-pr/SKILL.md` for full commit message guide and `.claude/skills/fix-issue/SKILL.md` for the issue-fixing workflow.
 
 ## MCP Server
 
@@ -115,11 +144,12 @@ See `docs/mcp-integration.md` for the full tool/resource reference and LLM label
 
 ## Quality Gates
 
-Three layers block bad code from reaching main:
+Four layers block bad code from reaching main:
 
-1. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `bash .githooks/setup.sh` (also sets `pull.rebase=true` and `rebase.autoStash=true` to handle bot commits on remote)
-2. **Claude Code hook** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format + `git pull --rebase` before `git push`
-3. **GitHub branch protection** — PRs require Lint, Test, and Docker Build checks to pass
+1. **Permission deny rules** (`.claude/settings.json`) — hard-block force push, hard reset, checkout-dot, clean -f. Cannot be bypassed.
+2. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `bash .githooks/setup.sh`
+3. **Claude Code hooks** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format + `git pull --rebase` before `git push`
+4. **GitHub branch protection** — PRs require Lint, Test, and Docker Build checks to pass
 
 If a commit is blocked, fix the issue first. Do not bypass with `--no-verify`.
 
