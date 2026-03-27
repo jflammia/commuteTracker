@@ -58,13 +58,36 @@ GPS data from the iPhone to our FastAPI receiver running on the homelab.
 | `days` | -1 | Days of local location retention |
 
 ### Recommended Settings for Commute Tracking
-```
-locatorDisplacement: 10       # 10 meters (more granular than default 100m)
-locatorInterval: 10           # 10 seconds (more frequent than default 300s)
-monitoring: 2                 # Move Mode
-downgrade: 20                 # Fall back to Significant at 20% battery
-ignoreInaccurateLocations: 50 # Drop fixes worse than 50m accuracy
-```
+
+These settings are tuned for reliable commute detection with minimal battery impact. Configure once and forget.
+
+| Field Label (exact) | Value | Units | Purpose |
+|---------------------|-------|-------|---------|
+| `monitoring` | `2` | mode | **Move mode** — continuous background tracking |
+| `locatorInterval` | `30` | seconds | Report location every 30s while moving |
+| `locatorDisplacement` | `50` | meters | Only report when you've moved 50m+ |
+| `ignoreInaccurateLocations` | `100` | meters | Drop GPS readings with >100m accuracy |
+| `ignoreStaleLocations` | `1` | days | Discard cached location data older than 1 day |
+
+#### Why these values?
+
+**`monitoring` = 2 (Move mode)** — Significant mode (1) only triggers on ~500m movements, missing short walking segments (e.g., the 3-minute walk from train station to office). Move mode captures these transitions reliably.
+
+**`locatorInterval` = 30 seconds** — The transport mode classifier detects transitions by watching speed changes over time. Walking-to-train transitions happen over 2-5 minutes, so 30-second intervals provide 4-10 data points per transition — plenty for accurate classification without excessive battery drain.
+
+**`locatorDisplacement` = 50 meters** — The key battery-saving setting. While sitting at home or at your desk, the app won't send reports because you haven't moved 50 meters. Without this, a work-from-home day generates thousands of identical stationary points. With it, you get near-zero points while stationary and full coverage while commuting.
+
+**`ignoreInaccurateLocations` = 100 meters** — Indoor GPS can produce readings with 200-500m accuracy. These noisy fixes create phantom movement that confuses the classifier. Filtering at 100m ensures only reliable outdoor GPS data reaches CommuteTracker.
+
+**`ignoreStaleLocations` = 1 day** — Safety net that discards any cached or delayed location data. Prevents old location batches from being misinterpreted as current movement.
+
+#### Step-by-step
+
+1. Open OwnTracks on your iPhone
+2. Tap the **gear icon** to open Settings
+3. Set each field listed above to the recommended value
+4. Return to the main map view — tracking begins immediately
+5. You should never need to revisit these settings
 
 ---
 
