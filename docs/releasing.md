@@ -47,6 +47,19 @@ git tag v0.0.2
 git push origin main --tags
 ```
 
+Alternatively, trigger from the **GitHub Actions UI**:
+
+1. Go to **Actions** → **Release** workflow
+2. Click **Run workflow**
+3. Enter the version (e.g. `0.0.2`)
+4. Click **Run workflow**
+
+Or create a **GitHub Release** via the UI or `gh` CLI:
+
+```bash
+gh release create v0.0.2 --generate-notes
+```
+
 ### 4. CI takes over
 
 The `v0.0.2` tag push triggers `.github/workflows/release.yml`, which:
