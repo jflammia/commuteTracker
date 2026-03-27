@@ -227,3 +227,89 @@ def test_suggest_mode():
     assert _suggest_mode(4.0, 6.0, 1.0) == "walking"
     assert _suggest_mode(15.0, 25.0, 5.0) == "driving"
     assert _suggest_mode(80.0, 120.0, 10.0) == "train"
+
+
+# ── Rebuild Response Shape Tests ─────────────────────────────────────────────
+
+
+def test_rebuild_empty_db_response_shape(service):
+    """Rebuild with no records should return correct response shape, not crash."""
+    result = service.rebuild_derived()
+    assert result["dry_run"] is False
+    assert isinstance(result["filters"], dict)
+    assert isinstance(result["dates_processed"], list)
+    assert len(result["dates_processed"]) == 0
+    assert isinstance(result["files_written"], int)
+    assert result["files_written"] == 0
+    assert result["total_records"] == 0
+    assert result["commutes_found"] == 0
+
+
+def _insert_location(db, lat, lon, tst, user="test", device="phone"):
+    """Helper to insert a realistic OwnTracks location payload."""
+    import time
+
+    payload = {
+        "_type": "location",
+        "lat": lat,
+        "lon": lon,
+        "tst": tst,
+        "acc": 10,
+        "alt": 50,
+        "batt": 85,
+        "vel": 0,
+        "tid": "te",
+        "received_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(tst)),
+    }
+    return db.insert_record(payload, user=user, device=device)
+
+
+def test_rebuild_with_data_response_shape(tmp_path):
+    """Rebuild with real records should return dates_processed as strings and files_written as int."""
+    import time
+
+    db_url = f"sqlite:///{tmp_path / 'test.db'}"
+    db = Database(db_url)
+    db.create_tables()
+    derived_dir = tmp_path / "derived"
+    derived_dir.mkdir()
+    svc = CommuteService(db=db, derived_dir=derived_dir)
+
+    # Insert several location points with the same date (timestamps for 2026-03-27)
+    base_tst = 1774828800  # approx 2026-03-27 00:00 UTC
+    for i in range(5):
+        _insert_location(db, 40.7128 + i * 0.001, -74.0060, base_tst + i * 300)
+
+    result = svc.rebuild_derived()
+
+    assert result["dry_run"] is False
+    assert isinstance(result["total_records"], int)
+    assert result["total_records"] >= 5
+    assert isinstance(result["commutes_found"], int)
+    assert isinstance(result["dates_processed"], list)
+    assert isinstance(result["files_written"], int)
+    assert result["files_written"] > 0
+    # dates_processed should be date strings, not file paths
+    for d in result["dates_processed"]:
+        assert isinstance(d, str)
+        assert ".parquet" not in d
+        assert "/" not in d
+
+
+def test_rebuild_with_filters_response_shape(tmp_path):
+    """Rebuild with filters should pass them through and return correct shape."""
+    db_url = f"sqlite:///{tmp_path / 'test.db'}"
+    db = Database(db_url)
+    db.create_tables()
+    derived_dir = tmp_path / "derived"
+    derived_dir.mkdir()
+    svc = CommuteService(db=db, derived_dir=derived_dir)
+
+    result = svc.rebuild_derived(since="2026-01-01", until="2026-12-31", user="joe")
+
+    assert result["dry_run"] is False
+    assert result["filters"]["since"] == "2026-01-01"
+    assert result["filters"]["until"] == "2026-12-31"
+    assert result["filters"]["user"] == "joe"
+    assert isinstance(result["dates_processed"], list)
+    assert isinstance(result["files_written"], int)
