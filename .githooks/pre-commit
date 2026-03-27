@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-commit hook: blocks commits that fail lint or formatting.
+# Install: git config core.hooksPath .githooks
+# This file is checked into the repo so all contributors get it.
+
+set -e
+
+# Find ruff: prefer venv, fall back to PATH
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
+    RUFF="$REPO_ROOT/.venv/bin/ruff"
+elif command -v ruff &>/dev/null; then
+    RUFF="ruff"
+else
+    echo "pre-commit: ruff not found. Install with: pip install ruff"
+    exit 1
+fi
+
+echo "pre-commit: running ruff check..."
+"$RUFF" check src/ tests/ || {
+    echo ""
+    echo "BLOCKED: ruff check failed. Run 'ruff check --fix src/ tests/' to fix."
+    exit 1
+}
+
+echo "pre-commit: running ruff format check..."
+"$RUFF" format --check src/ tests/ || {
+    echo ""
+    echo "BLOCKED: ruff format check failed. Run 'ruff format src/ tests/' to fix."
+    exit 1
+}
+
+echo "pre-commit: all checks passed."

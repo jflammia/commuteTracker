@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$PROJECT_DIR\" && RUFF=\".venv/bin/ruff\"; [ ! -x \"$RUFF\" ] && RUFF=ruff; echo \"pre-commit gate: checking lint...\" && \"$RUFF\" check src/ tests/ && echo \"pre-commit gate: checking format...\" && \"$RUFF\" format --check src/ tests/ && echo \"pre-commit gate: running tests...\" && .venv/bin/python -m pytest --tb=short -q || { echo \"BLOCKED: lint, format, or tests failed. Fix before committing.\"; exit 1; }'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$PROJECT_DIR\" && RUFF=\".venv/bin/ruff\"; [ ! -x \"$RUFF\" ] && RUFF=ruff; echo \"pre-push gate: checking lint...\" && \"$RUFF\" check src/ tests/ && echo \"pre-push gate: checking format...\" && \"$RUFF\" format --check src/ tests/ || { echo \"BLOCKED: lint or format failed. Fix before pushing.\"; exit 1; }'"
+          }
+        ]
+      }
+    ]
+  }
+}
