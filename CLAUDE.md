@@ -83,6 +83,16 @@ Start the server first: `uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080
 
 See `docs/mcp-integration.md` for the full tool/resource reference and LLM labeling workflows.
 
+## Quality Gates
+
+Three layers block bad code from reaching main:
+
+1. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `git config core.hooksPath .githooks`
+2. **Claude Code hook** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format before `git push`
+3. **GitHub branch protection** — PRs require Lint, Test, and Docker Build checks to pass
+
+If a commit is blocked, fix the issue first. Do not bypass with `--no-verify`.
+
 ## Key Conventions
 
 - Receiver **must always return 200** to OwnTracks (the app retries/backs off on non-200)
