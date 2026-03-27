@@ -84,6 +84,13 @@ class CommuteService:
             return []
         return _df_to_records(df)
 
+    def get_all_segments(self, direction: str | None = None) -> list[dict]:
+        """Get segments for all commutes in a single query."""
+        df = self._derived_store.get_all_segments(direction=direction)
+        if df.is_empty():
+            return []
+        return _df_to_records(df)
+
     # ── Analytics ─────────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:
@@ -103,11 +110,34 @@ class CommuteService:
         return _df_to_records(df)
 
     def query_derived(self, sql: str) -> list[dict]:
-        """Run an arbitrary SQL query over derived Parquet data.
+        """Run a read-only SQL query over derived Parquet data.
 
-        Use 'commute_data' as the table name.
+        Use 'commute_data' as the table name. Only SELECT statements are allowed.
         Example: SELECT commute_id, avg(speed_kmh) FROM commute_data GROUP BY commute_id
         """
+        normalized = sql.strip().upper()
+        # Block non-SELECT statements to prevent filesystem access via DuckDB
+        if not normalized.startswith("SELECT"):
+            raise ValueError("Only SELECT queries are allowed")
+        # Block dangerous DuckDB functions/statements that could access the filesystem
+        blocked = [
+            "COPY",
+            "EXPORT",
+            "IMPORT",
+            "INSTALL",
+            "LOAD",
+            "ATTACH",
+            "CREATE",
+            "DROP",
+            "ALTER",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "PRAGMA",
+        ]
+        for keyword in blocked:
+            if keyword in normalized:
+                raise ValueError(f"Query contains blocked keyword: {keyword}")
         df = self._derived_store.query(sql)
         return _df_to_records(df)
 

@@ -72,6 +72,7 @@ mcp = FastMCP(
     lifespan=mcp_lifespan,
     stateless_http=True,
     json_response=True,
+    streamable_http_path="/",
 )
 
 

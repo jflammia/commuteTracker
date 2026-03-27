@@ -34,10 +34,9 @@ commutes = commutes.with_columns(
 )
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+_DOW_MAP = {i: name for i, name in enumerate(DAY_NAMES)}
 commutes = commutes.with_columns(
-    pl.col("day_of_week")
-    .map_elements(lambda d: DAY_NAMES[d], return_dtype=pl.Utf8)
-    .alias("day_name"),
+    pl.col("day_of_week").replace(_DOW_MAP, default="?").alias("day_name"),
 )
 
 # --- Direction filter ---

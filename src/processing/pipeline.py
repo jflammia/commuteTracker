@@ -131,19 +131,14 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
     with db.session() as session:
         from src.storage.database import LocationRecord
 
-        query = session.query(LocationRecord).order_by(LocationRecord.received_at)
+        # Always filter to location messages to avoid processing transitions/cards/garbage
+        query = (
+            session.query(LocationRecord)
+            .filter(LocationRecord.msg_type == "location")
+            .order_by(LocationRecord.received_at)
+        )
 
         if filters:
-            from datetime import datetime, timezone
-
-            if "since" in filters:
-                since = datetime.strptime(filters["since"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                query = query.filter(LocationRecord.received_at >= since)
-            if "until" in filters:
-                until = datetime.strptime(filters["until"], "%Y-%m-%d").replace(
-                    hour=23, minute=59, second=59, tzinfo=timezone.utc
-                )
-                query = query.filter(LocationRecord.received_at <= until)
             if "user" in filters:
                 query = query.filter(LocationRecord.user == filters["user"])
             if "device" in filters:
@@ -164,13 +159,38 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
             rows.append(payload)
 
     df = pl.DataFrame(rows)
-    results["total_records"] = len(df)
 
     # Ensure required columns exist
     required = {"lat", "lon", "tst"}
     if not required.issubset(set(df.columns)):
         logger.warning(f"Missing required columns: {required - set(df.columns)}")
         return results
+
+    # Drop rows with null values in required fields (malformed payloads)
+    df = df.drop_nulls(subset=["lat", "lon", "tst"])
+    if df.is_empty():
+        return results
+
+    # Apply date filters using GPS timestamp (tst), not server received_at.
+    # This ensures filtering matches the actual GPS recording time.
+    if filters:
+        from datetime import datetime, timezone
+
+        if "since" in filters:
+            since_dt = datetime.strptime(filters["since"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            since_tst = int(since_dt.timestamp())
+            df = df.filter(pl.col("tst") >= since_tst)
+        if "until" in filters:
+            until_dt = datetime.strptime(filters["until"], "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+            until_tst = int(until_dt.timestamp())
+            df = df.filter(pl.col("tst") <= until_tst)
+
+    if df.is_empty():
+        return results
+
+    results["total_records"] = len(df)
 
     # Load label corrections from the same database
     from src.storage.label_store import LabelStore

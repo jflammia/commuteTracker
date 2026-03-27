@@ -4,7 +4,7 @@ import streamlit as st
 import polars as pl
 import altair as alt
 
-from src.dashboard.api_client import get_commutes, get_segments, get_stats
+from src.dashboard.api_client import get_commutes, get_all_segments, get_stats
 
 st.title("Trends & Patterns")
 st.markdown("Long-term view of your commute: how are things changing over weeks and months?")
@@ -120,19 +120,14 @@ if not weekly.is_empty():
 st.subheader("Transport Mode Time Split")
 st.markdown("How much of each commute is spent on each transport mode?")
 
-# Get segment data for all commutes
-all_segments = []
-for cid in commutes["commute_id"].to_list():
-    segs = get_segments(cid)
-    if not segs.is_empty():
-        segs = segs.with_columns(
-            pl.lit(cid).alias("commute_id"),
-            pl.lit(cid[:10]).alias("date"),
-        )
-        all_segments.append(segs)
+# Get segment data for all commutes in a single API call
+seg_df = get_all_segments()
 
-if all_segments:
-    seg_df = pl.concat(all_segments)
+if not seg_df.is_empty():
+    # Extract date from commute_id
+    seg_df = seg_df.with_columns(
+        pl.col("commute_id").str.slice(0, 10).alias("date"),
+    )
 
     # Time per mode per commute
     mode_time = (
@@ -191,10 +186,9 @@ if all_segments:
 st.subheader("Day of Week Pattern")
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+_DOW_MAP = {i: name for i, name in enumerate(DAY_NAMES)}
 commutes = commutes.with_columns(
-    pl.col("day_of_week")
-    .map_elements(lambda d: DAY_NAMES[d], return_dtype=pl.Utf8)
-    .alias("day_name"),
+    pl.col("day_of_week").replace(_DOW_MAP, default="?").alias("day_name"),
 )
 
 dow = (

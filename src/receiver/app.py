@@ -18,7 +18,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
-from starlette.routing import Mount
 
 from src.config import (
     DATABASE_URL,
@@ -117,18 +116,27 @@ async def lifespan(app: FastAPI):
     logger.info("REST API mounted at /api/v1")
 
     # Mount MCP server
+    mcp_session_mgr = None
     try:
         from src.mcp_server import mcp as mcp_server, set_service as set_mcp_service
 
         set_mcp_service(service)
-        app.routes.append(Mount("/mcp", app=mcp_server.streamable_http_app()))
+        mcp_app = mcp_server.streamable_http_app()
+        app.mount("/mcp", mcp_app)
+        # The MCP session manager must be started explicitly because FastAPI
+        # does not propagate lifespan events to mounted sub-applications.
+        mcp_session_mgr = mcp_server.session_manager
         logger.info("MCP server mounted at /mcp")
     except ImportError:
         logger.warning("MCP server not available (mcp package not installed)")
     except Exception:
         logger.exception("Failed to mount MCP server")
 
-    yield
+    if mcp_session_mgr is not None:
+        async with mcp_session_mgr.run():
+            yield
+    else:
+        yield
 
     # Shutdown: final S3 sync
     if sync_task is not None:

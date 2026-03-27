@@ -174,6 +174,20 @@ def get_points(commute_id: str):
     return get_service().get_commute_points(commute_id)
 
 
+@router.get("/segments", tags=["commutes"], summary="Get segments for all commutes")
+def get_all_segments(
+    direction: str | None = Query(
+        default=None, description="Filter by commute direction (e.g. morning, evening)"
+    ),
+):
+    """Get segment breakdown for all commutes in a single query.
+
+    Much more efficient than calling `/commutes/{id}/segments` for each commute.
+    Optionally filter by commute direction.
+    """
+    return get_service().get_all_segments(direction=direction)
+
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
 
@@ -304,12 +318,23 @@ def get_corrections():
     return get_service().get_corrections_map()
 
 
+class BulkLabelRequest(BaseModel):
+    """Wrapper for bulk label requests. Accepts {"labels": [...]} format."""
+
+    labels: list[LabelRequest]
+
+
 @router.post("/labels/bulk", tags=["labels"], summary="Bulk add labels")
-def add_labels_bulk(labels: list[LabelRequest]):
+def add_labels_bulk(body: list[LabelRequest] | BulkLabelRequest):
     """Add multiple segment label corrections in one request.
 
+    Accepts either a bare JSON array `[{...}, ...]` or wrapped `{"labels": [{...}, ...]}`.
     Useful for "mark all segments as correct" or batch correction workflows.
     """
+    if isinstance(body, BulkLabelRequest):
+        labels = body.labels
+    else:
+        labels = body
     return get_service().add_labels_bulk([lb.model_dump() for lb in labels])
 
 

@@ -105,6 +105,19 @@ def get_commute_points(commute_id: str) -> pl.DataFrame:
     return df
 
 
+def get_all_segments(direction: str | None = None) -> pl.DataFrame:
+    """Get segments for all commutes in a single query."""
+    records = _get("/segments", direction=direction)
+    if not records:
+        return pl.DataFrame()
+    df = pl.DataFrame(records)
+    if "start_time" in df.columns:
+        df = df.with_columns(pl.col("start_time").str.to_datetime(strict=False))
+    if "end_time" in df.columns:
+        df = df.with_columns(pl.col("end_time").str.to_datetime(strict=False))
+    return df
+
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
 

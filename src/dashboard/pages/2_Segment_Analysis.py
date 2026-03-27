@@ -4,7 +4,7 @@ import streamlit as st
 import polars as pl
 import altair as alt
 
-from src.dashboard.api_client import get_commutes, get_segments
+from src.dashboard.api_client import get_commutes, get_all_segments
 
 st.title("Segment Analysis")
 st.markdown("How does each leg of your commute behave over time? Which segments are most variable?")
@@ -15,19 +15,12 @@ if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
     st.stop()
 
-# --- Build per-segment history across all commutes ---
-all_segments = []
-for cid in commutes["commute_id"].to_list():
-    segs = get_segments(cid)
-    if not segs.is_empty():
-        segs = segs.with_columns(pl.lit(cid).alias("commute_id"))
-        all_segments.append(segs)
+# Fetch all segments in a single API call (instead of N+1 per commute)
+seg_df = get_all_segments()
 
-if not all_segments:
+if seg_df.is_empty():
     st.info("No segment data available yet.")
     st.stop()
-
-seg_df = pl.concat(all_segments)
 
 # Extract date and direction from commute_id (format: YYYY-MM-DD-direction)
 seg_df = seg_df.with_columns(

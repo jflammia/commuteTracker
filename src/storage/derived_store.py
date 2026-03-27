@@ -26,10 +26,11 @@ class DerivedStore:
         """Check if any Parquet files exist in the derived directory."""
         return any(self.derived_dir.rglob("*.parquet"))
 
-    def query(self, sql: str) -> pl.DataFrame:
+    def query(self, sql: str, params: list | None = None) -> pl.DataFrame:
         """Run a SQL query over all derived Parquet files.
 
         Use 'commute_data' as the table name in your query.
+        Use $1, $2, etc. for parameterized values passed via `params`.
         Returns an empty DataFrame if no Parquet files exist.
         """
         if not self._has_parquet_files():
@@ -38,6 +39,8 @@ class DerivedStore:
         full_sql = (
             f"WITH commute_data AS (SELECT * FROM read_parquet('{glob}', union_by_name=true)) {sql}"
         )
+        if params:
+            return self._conn.execute(full_sql, params).pl()
         return self._conn.execute(full_sql).pl()
 
     def get_commutes(self) -> pl.DataFrame:
@@ -59,7 +62,8 @@ class DerivedStore:
 
     def get_segments(self, commute_id: str) -> pl.DataFrame:
         """Get segment breakdown for a specific commute."""
-        return self.query(f"""
+        return self.query(
+            """
             SELECT
                 segment_id,
                 transport_mode,
@@ -71,18 +75,66 @@ class DerivedStore:
                 ROUND(AVG(speed_kmh), 1) as avg_speed_kmh,
                 ROUND(MAX(speed_kmh), 1) as max_speed_kmh
             FROM commute_data
-            WHERE commute_id = '{commute_id}'
+            WHERE commute_id = $1
             GROUP BY segment_id, transport_mode
             ORDER BY segment_id
-        """)
+            """,
+            [commute_id],
+        )
 
     def get_daily_summary(self, date: str) -> pl.DataFrame:
         """Get all points for a given date (YYYY-MM-DD)."""
-        return self.query(f"""
+        return self.query(
+            """
             SELECT *
             FROM commute_data
-            WHERE CAST(timestamp AS DATE) = '{date}'
+            WHERE CAST(timestamp AS DATE) = CAST($1 AS DATE)
             ORDER BY timestamp
+            """,
+            [date],
+        )
+
+    def get_all_segments(self, direction: str | None = None) -> pl.DataFrame:
+        """Get segment breakdown for all commutes, optionally filtered by direction."""
+        if direction:
+            return self.query(
+                """
+                SELECT
+                    commute_id,
+                    segment_id,
+                    transport_mode,
+                    MIN(timestamp) as start_time,
+                    MAX(timestamp) as end_time,
+                    COUNT(*) as point_count,
+                    ROUND(SUM(distance_m), 0) as distance_m,
+                    ROUND(EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60, 1)
+                        as duration_min,
+                    ROUND(AVG(speed_kmh), 1) as avg_speed_kmh,
+                    ROUND(MAX(speed_kmh), 1) as max_speed_kmh
+                FROM commute_data
+                WHERE commute_id IS NOT NULL AND commute_direction = $1
+                GROUP BY commute_id, segment_id, transport_mode
+                ORDER BY commute_id, segment_id
+                """,
+                [direction],
+            )
+        return self.query("""
+            SELECT
+                commute_id,
+                segment_id,
+                transport_mode,
+                MIN(timestamp) as start_time,
+                MAX(timestamp) as end_time,
+                COUNT(*) as point_count,
+                ROUND(SUM(distance_m), 0) as distance_m,
+                ROUND(EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60, 1)
+                    as duration_min,
+                ROUND(AVG(speed_kmh), 1) as avg_speed_kmh,
+                ROUND(MAX(speed_kmh), 1) as max_speed_kmh
+            FROM commute_data
+            WHERE commute_id IS NOT NULL
+            GROUP BY commute_id, segment_id, transport_mode
+            ORDER BY commute_id, segment_id
         """)
 
     def get_commute_stats(self) -> pl.DataFrame:
@@ -114,9 +166,12 @@ class DerivedStore:
 
     def get_commute_points(self, commute_id: str) -> pl.DataFrame:
         """Get all points for a specific commute, ordered by timestamp."""
-        return self.query(f"""
+        return self.query(
+            """
             SELECT *
             FROM commute_data
-            WHERE commute_id = '{commute_id}'
+            WHERE commute_id = $1
             ORDER BY timestamp
-        """)
+            """,
+            [commute_id],
+        )
