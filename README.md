@@ -12,10 +12,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/jflammia/commuteTracker/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jflammia/commuteTracker/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/jflammia/commuteTracker/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jflammia/commuteTracker?include_prereleases&sort=semver" /></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white" />
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
-  <img alt="Docker" src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" />
+  <a href="https://ghcr.io/jflammia/commutetracker"><img alt="Docker" src="https://img.shields.io/badge/ghcr.io-commutetracker-2496ED?logo=docker&logoColor=white" /></a>
   <img alt="MCP" src="https://img.shields.io/badge/MCP-enabled-8A2BE2" />
 </p>
 
@@ -59,6 +60,14 @@ Commute Tracker collects GPS data from your phone via [OwnTracks](https://owntra
 ## Quick Start
 
 ### Docker (recommended)
+
+Using a pre-built image from GHCR:
+
+```bash
+docker pull ghcr.io/jflammia/commutetracker:latest
+```
+
+Or build from source:
 
 ```bash
 git clone https://github.com/jflammia/commuteTracker.git
@@ -266,6 +275,7 @@ docs/              # API reference, MCP guide, ADRs
 |----------|-------------|
 | [API Reference](docs/api-reference.md) | REST API endpoints, request/response examples |
 | [MCP Integration](docs/mcp-integration.md) | LLM integration guide, tools, resources, workflows |
+| [Releasing](docs/releasing.md) | Version scheme, release process, Docker tags |
 | [OwnTracks Setup](docs/setup_owntracks.md) | Phone configuration guide |
 | [Project Plan](docs/project_plan.md) | Architecture, phases, and decisions |
 | [ADR-001: Storage](docs/decisions/adr-001-storage-architecture.md) | SQLite + S3 storage design |

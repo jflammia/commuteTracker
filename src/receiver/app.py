@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Commute Tracker",
-    version="0.1.0",
+    version="0.0.1",
     description=(
         "GPS-based commute tracking system. Collects location data from OwnTracks, "
         "segments commutes into transport modes (walk, drive, train, waiting), and "
