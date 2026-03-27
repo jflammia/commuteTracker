@@ -35,7 +35,7 @@ DATABASE_URL=sqlite:///data/commute_tracker.db
 # Your home and work coordinates (required for commute detection)
 HOME_LAT=40.7128
 HOME_LON=-74.0060
-HOME_RADIUS_M=150
+HOME_RADIUS_M=50
 
 WORK_LAT=40.7580
 WORK_LON=-73.9855

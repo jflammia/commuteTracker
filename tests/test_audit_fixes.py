@@ -591,3 +591,29 @@ def test_config_data_dirs_under_data_when_data_exists():
 
     assert "/data" in derived, f"DERIVED_DATA_DIR should be under /data, got: {derived}"
     assert "/data" in raw, f"RAW_DATA_DIR should be under /data, got: {raw}"
+
+
+# ── Fix 12: Home geofence radius default (#7) ────────────────────────────────
+
+
+def test_home_radius_default_is_50m():
+    """HOME_RADIUS_M should default to 50m, not 150m.
+
+    150m covers neighboring properties, causing false "at home" detection.
+    50m tightly covers a single residential property.
+    See: https://github.com/jflammia/commuteTracker/issues/7
+    """
+    import importlib
+    from unittest.mock import patch as _patch
+
+    with _patch.dict("os.environ", {}, clear=True):
+        import src.config
+
+        importlib.reload(src.config)
+        home_radius = src.config.HOME_RADIUS_M
+        work_radius = src.config.WORK_RADIUS_M
+
+    importlib.reload(src.config)
+
+    assert home_radius == 50.0, f"HOME_RADIUS_M default should be 50, got {home_radius}"
+    assert work_radius == 150.0, f"WORK_RADIUS_M default should be 150, got {work_radius}"

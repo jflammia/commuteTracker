@@ -36,7 +36,7 @@ RECORDER_URL = os.environ.get("RECORDER_URL", "")
 # Home geofence - set these in .env
 HOME_LAT = float(os.environ.get("HOME_LAT", "0.0"))
 HOME_LON = float(os.environ.get("HOME_LON", "0.0"))
-HOME_RADIUS_M = float(os.environ.get("HOME_RADIUS_M", "150"))
+HOME_RADIUS_M = float(os.environ.get("HOME_RADIUS_M", "50"))
 
 # Work geofence - set these in .env
 WORK_LAT = float(os.environ.get("WORK_LAT", "0.0"))

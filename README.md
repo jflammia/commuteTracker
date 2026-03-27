@@ -147,7 +147,7 @@ Copy `.env.example` to `.env` and configure:
 | `DATABASE_URL` | `sqlite:///data/commute_tracker.db` | SQLite or PostgreSQL connection string |
 | `HOME_LAT`, `HOME_LON` | `0.0` | Home location for commute detection |
 | `WORK_LAT`, `WORK_LON` | `0.0` | Work location for commute detection |
-| `HOME_RADIUS_M` | `150` | Geofence radius for home (meters) |
+| `HOME_RADIUS_M` | `50` | Geofence radius for home (meters) |
 | `WORK_RADIUS_M` | `150` | Geofence radius for work (meters) |
 | `S3_ENDPOINT_URL` | — | S3-compatible storage for backup (optional) |
 | `S3_BUCKET` | `commute-tracker-raw` | S3 bucket name |
