@@ -60,6 +60,13 @@ python scripts/rebuild_derived.py --date 2026-03-26 --clean --dry-run
 
 GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.yml` enforces conventional commits in PR titles. `release-please.yml` auto-creates a Release PR with changelog + version bump on each push to main. Merging the Release PR triggers `release.yml` which builds multi-arch (amd64+arm64) Docker image to GHCR. Use conventional commit prefixes in PR titles (`feat:`, `fix:`, `docs:`, etc.).
 
+## Commits & PRs
+
+Use the `commit-pr` skill (`.claude/skills/commit-pr/SKILL.md`) for all commits and PRs. Key rules:
+- **Conventional commits required**: `feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `style:`, `revert:`
+- **Never add AI attribution trailers** — no `Co-Authored-By: Claude`, `Signed-off-by`, or similar. Commits should look like any human-written commit.
+- PR titles follow the same conventional commit format (they become squash-merge commit messages)
+
 ## Key Conventions
 
 - Receiver **must always return 200** to OwnTracks (the app retries/backs off on non-200)

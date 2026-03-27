@@ -89,12 +89,12 @@ Separate from subject with a blank line. Explain:
 - **What** changed at a high level (not a file-by-file list)
 - Keep it concise — a few bullet points or a short paragraph
 
-### Step 5: Add the trailer
+### Step 5: No AI attribution trailers
 
-Every commit must end with:
-```
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
-```
+Do NOT add `Co-Authored-By`, `Signed-off-by`, or any other trailer that
+attributes the commit to an AI. The repo owner is the author — the commit
+should look like any other human-written commit. This applies to commits,
+PRs, and any git metadata.
 
 ### Step 6: Use a HEREDOC for the commit
 
@@ -106,8 +106,6 @@ fix(pipeline): filter non-location records before enrichment
 Pipeline crashed with 500 error when rebuilding without filters because
 transition and card records have null timestamps. Now filters
 msg_type=location at the DB query level.
-
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -162,8 +160,6 @@ feat(api): add batch segments endpoint
 Replaces N+1 per-commute API calls in dashboard pages 2 and 4 with a
 single GET /api/v1/segments query. Reduces page load from ~20 HTTP
 round-trips to 1.
-
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ```
 
 **CI change:**
@@ -179,8 +175,6 @@ fix: MCP server, SQL injection, pipeline crashes, and dashboard perf
 - Parameterize DuckDB queries to prevent SQL injection
 - Filter non-location records before pipeline enrichment
 - Add batch segments endpoint to fix N+1 in dashboard
-
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ```
 
 ## Common Mistakes to Avoid
@@ -189,6 +183,6 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 - **"Fix bug"** — too vague; say what bug
 - **Starting with a capital letter** after the colon
 - **Using past tense** ("fixed", "added") instead of imperative ("fix", "add")
-- **Forgetting the Co-Authored-By trailer**
+- **Adding AI attribution trailers** (`Co-Authored-By: Claude ...`) — never do this
 - **Using `feat` for non-user-facing changes** — internal refactors are `refactor`
 - **Putting everything in one giant commit** — prefer logical, atomic commits
