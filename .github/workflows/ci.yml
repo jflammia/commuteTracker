@@ -52,13 +52,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v4
-
       - name: Build image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          tags: commute-tracker:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: docker build -t commute-tracker:test .
