@@ -1,4 +1,34 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(ruff *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(pip *)",
+      "Bash(source *)",
+      "Bash(export *)",
+      "Bash(bash *)",
+      "Bash(chmod *)",
+      "Bash(pkill *)",
+      "Bash(uvicorn *)",
+      "Bash(streamlit *)",
+      "Bash(docker *)",
+      "Bash(curl *)",
+      "Bash(rtk *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(wc *)",
+      "Bash(sleep *)",
+      "Bash(pbcopy)",
+      "WebSearch",
+      "WebFetch(*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
