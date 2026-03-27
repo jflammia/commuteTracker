@@ -10,9 +10,15 @@ GPS data from the iPhone to our FastAPI receiver running on the homelab.
 ## iOS Configuration Checklist
 
 ### System Settings (iOS Settings App)
-1. **Privacy & Security > Location Services > OwnTracks** -> **Always**
-2. **General > Background App Refresh** -> On for OwnTracks
-3. **Battery > Low Power Mode** -> Off during commute (degrades tracking)
+
+These iOS-level settings affect OwnTracks background tracking. Set them once.
+
+| Setting | Required value | Path | If wrong |
+|---------|---------------|------|----------|
+| Location Services → OwnTracks | **Always** | Settings → Privacy & Security → Location Services → OwnTracks | "While Using" = no tracking when app is backgrounded |
+| Background App Refresh | **ON** | Settings → General → Background App Refresh → OwnTracks | OFF = iOS may suspend OwnTracks |
+| Motion & Fitness → OwnTracks | **Allow** | Settings → Privacy & Security → Motion & Fitness → OwnTracks | Denied = no CoreMotion data (walking/automotive/cycling empty) |
+| Low Power Mode | **OFF** (or understand trade-off) | Settings → Battery | ON = may delay or skip location reports |
 
 ### OwnTracks App Settings
 1. **Mode**: HTTP
@@ -68,6 +74,7 @@ These settings are tuned for reliable commute detection with minimal battery imp
 | `locatorDisplacement` | `50` | meters | Only report when you've moved 50m+ |
 | `ignoreInaccurateLocations` | `100` | meters | Drop GPS readings with >100m accuracy |
 | `ignoreStaleLocations` | `1` | days | Discard cached location data older than 1 day |
+| `downgrade` | `15` | battery % | Auto-downgrade to Significant mode at low battery |
 
 #### Why these values?
 
@@ -80,6 +87,12 @@ These settings are tuned for reliable commute detection with minimal battery imp
 **`ignoreInaccurateLocations` = 100 meters** — Indoor GPS can produce readings with 200-500m accuracy. These noisy fixes create phantom movement that confuses the classifier. Filtering at 100m ensures only reliable outdoor GPS data reaches CommuteTracker.
 
 **`ignoreStaleLocations` = 1 day** — Safety net that discards any cached or delayed location data. Prevents old location batches from being misinterpreted as current movement.
+
+**`downgrade` = 15%** — When battery drops below 15% and the device is not charging, Move mode automatically downgrades to Significant mode to conserve power. When battery rises back above 15% (or starts charging), Move mode is restored. Without this, Move mode runs continuous GPS even at 3% battery, risking the phone dying mid-commute.
+
+> **Note:** The `locked` field appears greyed out in OwnTracks Settings — it cannot be changed through the UI. It's for managed deployments via `.otrc` config files. Ignore it.
+
+> **Note:** Keep `extendedData` ON (the default). This includes battery level, connection type, WiFi network, and CoreMotion activity (walking/automotive/cycling) in each report — all valuable for commute analytics.
 
 #### Step-by-step
 
@@ -205,8 +218,8 @@ Name a region `Home|1|2` to auto-switch to Move Mode (2) when leaving home
 and Significant Mode (1) when arriving. This saves battery outside commute hours.
 
 ### Battery Downgrade
-Set `downgrade: 20` to auto-fall-back from Move to Significant when battery
-drops below 20%. Plugging in the charger reverts to Move Mode automatically.
+Set `downgrade: 15` to auto-fall-back from Move to Significant when battery
+drops below 15%. Plugging in the charger reverts to Move Mode automatically.
 
 ---
 
