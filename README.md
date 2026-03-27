@@ -198,7 +198,7 @@ To connect to a remote instance instead, edit `.mcp.json`:
 {
   "mcpServers": {
     "commute-tracker": {
-      "type": "url",
+      "type": "http",
       "url": "https://your-server/mcp/"
     }
   }
@@ -213,7 +213,7 @@ Open **Settings > Developer > Edit Config** and add:
 {
   "mcpServers": {
     "commute-tracker": {
-      "type": "url",
+      "type": "http",
       "url": "https://your-server:8080/mcp/"
     }
   }

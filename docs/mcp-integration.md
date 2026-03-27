@@ -19,7 +19,7 @@ If you cloned the repo, it just works — `.mcp.json` auto-connects to `localhos
 {
   "mcpServers": {
     "commute-tracker": {
-      "type": "url",
+      "type": "http",
       "url": "https://your-server/mcp/"
     }
   }
@@ -34,7 +34,7 @@ Open **Settings > Developer > Edit Config** and add:
 {
   "mcpServers": {
     "commute-tracker": {
-      "type": "url",
+      "type": "http",
       "url": "https://your-server/mcp/"
     }
   }

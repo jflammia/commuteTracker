@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "commute-tracker": {
-      "type": "url",
+      "type": "http",
       "url": "http://localhost:8080/mcp/"
     }
   }

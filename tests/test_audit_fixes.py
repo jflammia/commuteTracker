@@ -10,6 +10,8 @@ Covers:
 7. Bulk labels accepting both formats
 8. Vectorized day-of-week replace (map_elements removed)
 9. MCP server works behind reverse proxy (no Host header rejection)
+10. .mcp.json uses correct transport type for Claude Code (#5)
+11. Container data paths resolve to writable volume (#6)
 """
 
 import time
@@ -508,3 +510,84 @@ def test_polars_replace_unknown_day():
     )
 
     assert result["day_name"].to_list() == ["Mon", "?"]
+
+
+# ── Fix 10: .mcp.json transport type (#5) ────────────────────────────────────
+
+
+def test_mcp_json_uses_http_type():
+    """'.mcp.json must use "type": "http", not "type": "url".
+
+    Claude Code only recognizes "http" for Streamable HTTP transport.
+    "url" silently fails — the server doesn't register and no tools appear.
+    See: https://github.com/jflammia/commuteTracker/issues/5
+    """
+    import json
+    from pathlib import Path
+
+    mcp_json_path = Path(__file__).parent.parent / ".mcp.json"
+    assert mcp_json_path.exists(), ".mcp.json missing from repo root"
+
+    config = json.loads(mcp_json_path.read_text())
+    servers = config.get("mcpServers", {})
+    assert len(servers) > 0, "No MCP servers configured"
+
+    for name, server_config in servers.items():
+        server_type = server_config.get("type", "")
+        assert server_type == "http", (
+            f"MCP server '{name}' uses type '{server_type}', must be 'http'"
+        )
+
+
+def test_mcp_docs_no_type_url():
+    """Docs must not contain 'type': 'url' — only 'type': 'http' is valid.
+
+    See: https://github.com/jflammia/commuteTracker/issues/5
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).parent.parent
+    docs_to_check = [
+        repo_root / "docs" / "mcp-integration.md",
+        repo_root / "README.md",
+    ]
+    for doc_path in docs_to_check:
+        if doc_path.exists():
+            content = doc_path.read_text()
+            assert '"type": "url"' not in content, (
+                f'{doc_path.name} contains \'"type": "url"\' — must be \'"type": "http"\''
+            )
+
+
+# ── Fix 11: Container data paths (#6) ────────────────────────────────────────
+
+
+def test_config_data_dirs_under_data_when_data_exists():
+    """When /data exists (container), derived/raw dirs should be under /data.
+
+    In container deployments, the only writable volume is /data. Defaulting
+    DERIVED_DATA_DIR and RAW_DATA_DIR to PROJECT_ROOT/derived and
+    PROJECT_ROOT/raw causes Permission denied errors.
+    See: https://github.com/jflammia/commuteTracker/issues/6
+    """
+    import importlib
+    from unittest.mock import patch as _patch
+
+    # Simulate container environment: /data exists, no env vars set
+    with (
+        _patch("os.environ", {}),
+        _patch("pathlib.Path.is_dir", return_value=True),
+    ):
+        # Reload config to pick up mocked environment
+        import src.config
+
+        importlib.reload(src.config)
+
+        derived = str(src.config.DERIVED_DATA_DIR)
+        raw = str(src.config.RAW_DATA_DIR)
+
+    # Restore real config
+    importlib.reload(src.config)
+
+    assert "/data" in derived, f"DERIVED_DATA_DIR should be under /data, got: {derived}"
+    assert "/data" in raw, f"RAW_DATA_DIR should be under /data, got: {raw}"
