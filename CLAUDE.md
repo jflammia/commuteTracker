@@ -87,7 +87,7 @@ See `docs/mcp-integration.md` for the full tool/resource reference and LLM label
 
 Three layers block bad code from reaching main:
 
-1. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `git config core.hooksPath .githooks`
+1. **Git pre-commit hook** (`.githooks/pre-commit`) — runs `ruff check` + `ruff format --check` before every commit. Activate with: `bash .githooks/setup.sh` (also sets `pull.rebase=true` and `rebase.autoStash=true` to handle bot commits on remote)
 2. **Claude Code hook** (`.claude/settings.json`) — runs lint + format + tests before `git commit`, lint + format before `git push`
 3. **GitHub branch protection** — PRs require Lint, Test, and Docker Build checks to pass
 

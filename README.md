@@ -88,7 +88,7 @@ Point OwnTracks to `http://your-server:8080/pub` and you're collecting data.
 
 ```bash
 pip install -e ".[dev]"
-git config core.hooksPath .githooks   # Enable pre-commit lint checks
+bash .githooks/setup.sh               # Git hooks + rebase config
 
 # Start the server (receiver + API + MCP)
 uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080

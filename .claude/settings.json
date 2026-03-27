@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'cd \"$PROJECT_DIR\" && RUFF=\".venv/bin/ruff\"; [ ! -x \"$RUFF\" ] && RUFF=ruff; echo \"pre-push gate: checking lint...\" && \"$RUFF\" check src/ tests/ && echo \"pre-push gate: checking format...\" && \"$RUFF\" format --check src/ tests/ || { echo \"BLOCKED: lint or format failed. Fix before pushing.\"; exit 1; }'"
+            "command": "bash -c 'cd \"$PROJECT_DIR\" && RUFF=\".venv/bin/ruff\"; [ ! -x \"$RUFF\" ] && RUFF=ruff; echo \"pre-push gate: checking lint...\" && \"$RUFF\" check src/ tests/ && echo \"pre-push gate: checking format...\" && \"$RUFF\" format --check src/ tests/ && echo \"pre-push gate: syncing with remote...\" && git pull --rebase --autostash || { echo \"BLOCKED: lint, format, or rebase failed. Fix before pushing.\"; exit 1; }'"
           }
         ]
       }

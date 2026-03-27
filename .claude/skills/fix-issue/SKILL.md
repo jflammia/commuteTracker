@@ -149,8 +149,13 @@ Fixes #3
 ## Step 8: Push and Verify
 
 ```bash
+git pull        # Rebase on remote (release-please or other bot commits)
 git push
 ```
+
+If push is rejected, `git pull` again and retry. The repo is configured with
+`pull.rebase=true` and `rebase.autoStash=true` so this handles divergence
+from bot commits automatically — no manual stash/pop.
 
 Then verify:
 - `gh issue view <number>` — should show CLOSED

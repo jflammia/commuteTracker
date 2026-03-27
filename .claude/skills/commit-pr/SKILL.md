@@ -90,6 +90,25 @@ The pre-commit hook (`.githooks/pre-commit`) runs lint + format check on
 every commit. The Claude Code hook (`.claude/settings.json`) also runs
 tests. If either blocks, fix the issue and retry — do not use `--no-verify`.
 
+## Commit and Push Pattern
+
+The remote may have new commits from release-please, dependabot, or other
+contributors. The repo is configured with `pull.rebase=true` and
+`rebase.autoStash=true`, so `git pull` handles this automatically.
+
+Always follow this sequence:
+
+```bash
+git add <files>
+git commit -m "..."        # Pre-commit hook runs lint + format check
+git pull                   # Rebase on remote (autostash handles dirty state)
+git push
+```
+
+If push is rejected ("remote contains work you don't have"), `git pull`
+and retry. With autostash configured, this always works — no manual
+stash/pop needed.
+
 ## Writing the Commit Message
 
 ### Step 1: Understand the changes
