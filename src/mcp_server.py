@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from mcp.server.fastmcp import FastMCP, Context
 
 from src.api.service import CommuteService
-from src.config import DATABASE_URL
+from src.config import DATABASE_URL, RECEIVER_HOST
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,11 @@ mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
+    # Use the receiver's bind address so the MCP SDK doesn't auto-enable
+    # localhost-only DNS rebinding protection. This allows the MCP server
+    # to work behind reverse proxies (Traefik, nginx, Caddy) where the
+    # Host header is the proxy's external hostname, not localhost.
+    host=RECEIVER_HOST,
 )
 
 
