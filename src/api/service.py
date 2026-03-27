@@ -192,8 +192,13 @@ class CommuteService:
         return {
             "dry_run": False,
             "filters": filters,
-            "dates_processed": list(results.keys()),
-            "files_written": sum(len(v) if isinstance(v, list) else 1 for v in results.values()),
+            "total_records": results.get("total_records", 0),
+            "commutes_found": results.get("commutes_found", 0),
+            "dates_processed": [
+                p.rsplit("/", 1)[-1].replace(".parquet", "")
+                for p in results.get("files_written", [])
+            ],
+            "files_written": len(results.get("files_written", [])),
         }
 
     def _clean_parquet_range(self, since: str | None, until: str | None) -> int:
