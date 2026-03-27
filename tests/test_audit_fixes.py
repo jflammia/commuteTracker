@@ -9,6 +9,7 @@ Covers:
 6. Batch segments endpoint
 7. Bulk labels accepting both formats
 8. Vectorized day-of-week replace (map_elements removed)
+9. MCP server works behind reverse proxy (no Host header rejection)
 """
 
 import time
@@ -127,6 +128,50 @@ def test_mcp_session_manager_accessible():
     # streamable_http_app() creates the session manager
     mcp.streamable_http_app()
     assert mcp.session_manager is not None
+
+
+def test_mcp_host_not_localhost():
+    """MCP host must not be localhost to avoid DNS rebinding protection blocking proxies.
+
+    When host is 127.0.0.1/localhost, the MCP SDK auto-enables strict Host header
+    validation that rejects requests from reverse proxies. Setting host to 0.0.0.0
+    (or any non-localhost value) disables this, allowing proxy Host headers through.
+    See: https://github.com/jflammia/commuteTracker/issues/3
+    """
+    from src.mcp_server import mcp
+
+    assert mcp.settings.host not in ("127.0.0.1", "localhost", "::1")
+
+
+def test_mcp_dns_rebinding_protection_disabled():
+    """DNS rebinding protection should not be auto-enabled for non-localhost host.
+
+    The MCP SDK only auto-enables it when host is localhost. Since we set
+    host=RECEIVER_HOST (0.0.0.0), transport_security should either be None
+    or have enable_dns_rebinding_protection=False.
+    """
+    from src.mcp_server import mcp
+
+    security = mcp.settings.transport_security
+    if security is not None:
+        assert not security.enable_dns_rebinding_protection
+
+
+def test_mcp_accepts_proxy_host_header():
+    """MCP server should accept requests with non-localhost Host headers.
+
+    This simulates what happens behind a reverse proxy where the Host header
+    is the proxy's external hostname, not localhost.
+    """
+    from src.mcp_server import mcp
+
+    # The app should either have no security middleware or one that allows any host
+    security = mcp.settings.transport_security
+    if security is not None and security.enable_dns_rebinding_protection:
+        # If protection is enabled, proxy hostnames must be in the allowed list
+        assert any(
+            h in security.allowed_hosts for h in ["*", "0.0.0.0:*"]
+        ), f"Proxy hosts not allowed: {security.allowed_hosts}"
 
 
 # ── Fix 2: Date filters use GPS tst ─────────────────────────────────────────
