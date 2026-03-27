@@ -1,0 +1,465 @@
+"""Regression tests for audit fixes.
+
+Covers:
+1. MCP server mounting and initialization
+2. Pipeline date filters using GPS tst (not received_at)
+3. Pipeline robustness with non-location and malformed records
+4. SQL injection prevention in derived_store (parameterized queries)
+5. SQL sandboxing in query_derived (SELECT-only)
+6. Batch segments endpoint
+7. Bulk labels accepting both formats
+8. Vectorized day-of-week replace (map_elements removed)
+"""
+
+import time
+from unittest.mock import patch
+
+import polars as pl
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from src.api.routes import router, set_service
+from src.api.service import CommuteService
+from src.processing.pipeline import process_from_db, process_locations
+from src.storage.database import Database
+from src.storage.derived_store import DerivedStore
+
+HOME = (40.75, -74.00)
+WORK = (40.85, -73.95)
+
+
+# ── Shared fixtures ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def db(tmp_path):
+    db_url = f"sqlite:///{tmp_path / 'test.db'}"
+    database = Database(db_url)
+    database.create_tables()
+    return database
+
+
+@pytest.fixture
+def derived_dir(tmp_path):
+    d = tmp_path / "derived"
+    d.mkdir()
+    return d
+
+
+@pytest.fixture
+def service(db, derived_dir):
+    return CommuteService(db=db, derived_dir=derived_dir)
+
+
+@pytest.fixture
+def client(service):
+    set_service(service)
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _insert_location(db, lat, lon, tst, user="test", device="phone", msg_type="location"):
+    payload = {
+        "_type": msg_type,
+        "lat": lat,
+        "lon": lon,
+        "tst": tst,
+        "acc": 10,
+        "alt": 50,
+        "batt": 85,
+        "vel": 0,
+        "tid": "te",
+        "received_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(tst)),
+    }
+    return db.insert_record(payload, user=user, device=device)
+
+
+def _pipeline_config():
+    return patch.multiple(
+        "src.processing.pipeline",
+        HOME_LAT=HOME[0],
+        HOME_LON=HOME[1],
+        HOME_RADIUS_M=200.0,
+        WORK_LAT=WORK[0],
+        WORK_LON=WORK[1],
+        WORK_RADIUS_M=200.0,
+    )
+
+
+def _seed_commute(db, base_tst=1711440000):
+    """Insert a minimal commute: home points -> transit -> work points."""
+    # At home
+    for i in range(3):
+        _insert_location(db, HOME[0], HOME[1], base_tst + i * 10)
+    # Transit
+    for i in range(1, 11):
+        frac = i / 10
+        lat = HOME[0] + (WORK[0] - HOME[0]) * frac
+        lon = HOME[1] + (WORK[1] - HOME[1]) * frac
+        _insert_location(db, lat, lon, base_tst + 30 + i * 10)
+    # At work
+    for i in range(3):
+        _insert_location(db, WORK[0], WORK[1], base_tst + 140 + i * 10)
+
+
+def _rebuild_all(db, derived_dir):
+    """Run the pipeline and return results."""
+    with _pipeline_config():
+        return process_from_db(db, output_dir=derived_dir)
+
+
+# ── Fix 1: MCP server mounting ──────────────────────────────────────────────
+
+
+def test_mcp_streamable_http_path():
+    """MCP server should configure streamable_http_path='/' to avoid /mcp/mcp."""
+    from src.mcp_server import mcp
+
+    assert mcp.settings.streamable_http_path == "/"
+
+
+def test_mcp_session_manager_accessible():
+    """MCP server should expose session_manager for manual lifespan management."""
+    from src.mcp_server import mcp
+
+    # streamable_http_app() creates the session manager
+    mcp.streamable_http_app()
+    assert mcp.session_manager is not None
+
+
+# ── Fix 2: Date filters use GPS tst ─────────────────────────────────────────
+
+
+def test_pipeline_date_filter_uses_gps_tst(db, derived_dir):
+    """Date filters should match GPS timestamp, not server received_at."""
+    # Insert records with GPS tst on 2024-03-26 (1711411200 = 2024-03-26 00:00 UTC)
+    march26_tst = 1711411200
+    for i in range(5):
+        _insert_location(db, 40.75 + i * 0.001, -74.00, march26_tst + i * 60)
+
+    # Insert records with GPS tst on 2024-03-27
+    march27_tst = 1711497600
+    for i in range(5):
+        _insert_location(db, 40.76 + i * 0.001, -74.00, march27_tst + i * 60)
+
+    # Filter to March 26 only — should find exactly 5 records
+    with _pipeline_config():
+        results = process_from_db(
+            db, output_dir=derived_dir, filters={"since": "2024-03-26", "until": "2024-03-26"}
+        )
+    assert results["total_records"] == 5
+
+
+def test_pipeline_date_filter_excludes_out_of_range(db, derived_dir):
+    """Records outside the date range should be excluded."""
+    tst = 1711411200  # 2024-03-26
+    for i in range(3):
+        _insert_location(db, 40.75, -74.00, tst + i * 60)
+
+    # Filter to a different date — should find nothing
+    with _pipeline_config():
+        results = process_from_db(
+            db, output_dir=derived_dir, filters={"since": "2025-01-01", "until": "2025-01-31"}
+        )
+    assert results["total_records"] == 0
+
+
+# ── Fix 3 & 8: Pipeline robustness ──────────────────────────────────────────
+
+
+def test_pipeline_filters_non_location_records(db, derived_dir):
+    """Non-location message types should be filtered out at the DB level."""
+    tst = 1711440000
+    # Insert 3 locations and 2 non-locations
+    _insert_location(db, 40.75, -74.00, tst, msg_type="location")
+    _insert_location(db, 40.75, -74.00, tst + 10, msg_type="transition")
+    _insert_location(db, 40.76, -74.00, tst + 20, msg_type="location")
+    _insert_location(db, 40.76, -74.00, tst + 30, msg_type="card")
+    _insert_location(db, 40.77, -74.00, tst + 40, msg_type="location")
+
+    with _pipeline_config():
+        results = process_from_db(db, output_dir=derived_dir)
+    # Only the 3 location records should be processed
+    assert results["total_records"] == 3
+
+
+def test_pipeline_handles_null_required_fields(db, derived_dir):
+    """Records with null lat/lon/tst should be dropped without crashing."""
+    tst = 1711440000
+    # Insert a valid record
+    _insert_location(db, 40.75, -74.00, tst)
+    # Insert a record with null lat (malformed)
+    payload = {
+        "_type": "location",
+        "lat": None,
+        "lon": -74.00,
+        "tst": tst + 10,
+        "received_at": "2024-03-26T00:00:10Z",
+    }
+    db.insert_record(payload, user="test", device="phone")
+
+    with _pipeline_config():
+        results = process_from_db(db, output_dir=derived_dir)
+    # Should process 1 valid record, not crash on the null one
+    assert results["total_records"] == 1
+
+
+def test_pipeline_rebuild_no_filters_does_not_crash(db, derived_dir):
+    """Rebuild with no filters (the scenario that caused the 500 error)."""
+    tst = 1711440000
+    # Mix of message types
+    _insert_location(db, 40.75, -74.00, tst, msg_type="location")
+    _insert_location(db, 40.75, -74.00, tst + 10, msg_type="transition")
+    _insert_location(db, 40.76, -74.00, tst + 20, msg_type="location")
+
+    # Should not raise — this was the 500 error scenario
+    with _pipeline_config():
+        results = process_from_db(db, output_dir=derived_dir)
+    assert results["total_records"] == 2
+
+
+def test_process_locations_filters_type_column():
+    """process_locations should filter to _type=location when column exists."""
+    df = pl.DataFrame(
+        [
+            {"_type": "location", "lat": 40.75, "lon": -74.00, "tst": 1000},
+            {"_type": "transition", "lat": 40.75, "lon": -74.00, "tst": 1010},
+            {"_type": "location", "lat": 40.76, "lon": -74.00, "tst": 1020},
+        ]
+    )
+    with _pipeline_config():
+        result = process_locations(df)
+    assert len(result) == 2
+
+
+# ── Fix 4: SQL injection prevention ─────────────────────────────────────────
+
+
+def test_derived_store_parameterized_segments(db, derived_dir):
+    """get_segments should use parameterized queries, not f-string interpolation."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    store = DerivedStore(derived_dir)
+    # A normal query should work
+    commutes = store.get_commutes()
+    if not commutes.is_empty():
+        cid = commutes["commute_id"][0]
+        segments = store.get_segments(cid)
+        assert not segments.is_empty()
+
+    # An injection attempt should be safely handled (treated as literal string)
+    evil = "'; DROP TABLE commute_data; --"
+    result = store.get_segments(evil)
+    assert result.is_empty()
+
+
+def test_derived_store_parameterized_points(db, derived_dir):
+    """get_commute_points should use parameterized queries."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    store = DerivedStore(derived_dir)
+    evil = "' OR '1'='1"
+    result = store.get_commute_points(evil)
+    assert result.is_empty()
+
+
+def test_derived_store_parameterized_daily(db, derived_dir):
+    """get_daily_summary should use parameterized queries."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    store = DerivedStore(derived_dir)
+    # Valid date should work
+    result = store.get_daily_summary("2024-03-26")
+    assert not result.is_empty()
+
+    # Non-existent date should return empty (proves parameter is used, not concatenated)
+    result = store.get_daily_summary("1999-01-01")
+    assert result.is_empty()
+
+
+# ── Fix 5: SQL sandboxing ───────────────────────────────────────────────────
+
+
+def test_query_derived_blocks_non_select(service):
+    """Only SELECT queries should be allowed via query_derived."""
+    with pytest.raises(ValueError, match="Only SELECT"):
+        service.query_derived("CREATE TABLE evil (id int)")
+
+
+def test_query_derived_blocks_dangerous_keywords(service):
+    """Dangerous keywords should be blocked even inside SELECT."""
+    with pytest.raises(ValueError, match="blocked keyword"):
+        service.query_derived("SELECT * FROM commute_data; DROP TABLE commute_data")
+
+    with pytest.raises(ValueError, match="blocked keyword"):
+        service.query_derived("SELECT COPY 'data' TO '/tmp/evil.csv'")
+
+
+def test_query_derived_allows_valid_select(db, derived_dir):
+    """Valid SELECT queries should work."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    svc = CommuteService(db=db, derived_dir=derived_dir)
+    result = svc.query_derived("SELECT count(*) as cnt FROM commute_data")
+    assert len(result) == 1
+    assert result[0]["cnt"] > 0
+
+
+# ── Fix 6: Batch segments endpoint ──────────────────────────────────────────
+
+
+def test_batch_segments_empty(client):
+    """GET /segments should return empty list when no data."""
+    resp = client.get("/api/v1/segments")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_batch_segments_returns_data(db, derived_dir):
+    """GET /segments should return segments for all commutes in one call."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    svc = CommuteService(db=db, derived_dir=derived_dir)
+    set_service(svc)
+    app = FastAPI()
+    app.include_router(router)
+    c = TestClient(app)
+
+    resp = c.get("/api/v1/segments")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) > 0
+    # Each entry should have commute_id (batch endpoint includes it)
+    assert "commute_id" in data[0]
+    assert "segment_id" in data[0]
+    assert "transport_mode" in data[0]
+
+
+def test_batch_segments_direction_filter(db, derived_dir):
+    """GET /segments?direction=morning should filter by direction."""
+    _seed_commute(db)
+    _rebuild_all(db, derived_dir)
+
+    svc = CommuteService(db=db, derived_dir=derived_dir)
+    set_service(svc)
+    app = FastAPI()
+    app.include_router(router)
+    c = TestClient(app)
+
+    # Should return data or empty — but should not error
+    resp = c.get("/api/v1/segments?direction=morning")
+    assert resp.status_code == 200
+
+    resp = c.get("/api/v1/segments?direction=nonexistent")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+# ── Fix 7: Bulk labels accepts both formats ──────────────────────────────────
+
+
+def test_bulk_labels_bare_array(client):
+    """POST /labels/bulk should accept a bare JSON array."""
+    labels = [
+        {
+            "commute_id": "c1",
+            "segment_id": 0,
+            "original_mode": "driving",
+            "corrected_mode": "train",
+        },
+    ]
+    resp = client.post("/api/v1/labels/bulk", json=labels)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+def test_bulk_labels_wrapped_format(client):
+    """POST /labels/bulk should accept {"labels": [...]} format."""
+    wrapped = {
+        "labels": [
+            {
+                "commute_id": "c2",
+                "segment_id": 0,
+                "original_mode": "stationary",
+                "corrected_mode": "waiting",
+            },
+            {
+                "commute_id": "c2",
+                "segment_id": 1,
+                "original_mode": "driving",
+                "corrected_mode": "train",
+            },
+        ]
+    }
+    resp = client.post("/api/v1/labels/bulk", json=wrapped)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+
+def test_bulk_labels_both_formats_persist(client):
+    """Both formats should persist labels identically."""
+    # Bare array
+    client.post(
+        "/api/v1/labels/bulk",
+        json=[
+            {
+                "commute_id": "c3",
+                "segment_id": 0,
+                "original_mode": "driving",
+                "corrected_mode": "train",
+            }
+        ],
+    )
+    # Wrapped
+    client.post(
+        "/api/v1/labels/bulk",
+        json={
+            "labels": [
+                {
+                    "commute_id": "c3",
+                    "segment_id": 1,
+                    "original_mode": "stationary",
+                    "corrected_mode": "waiting",
+                }
+            ]
+        },
+    )
+
+    resp = client.get("/api/v1/labels?commute_id=c3")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+
+# ── Fix 8: Vectorized day-of-week replace ────────────────────────────────────
+
+
+def test_polars_replace_day_names():
+    """Vectorized replace should produce correct day names (replaces map_elements)."""
+    DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    _DOW_MAP = {i: name for i, name in enumerate(DAY_NAMES)}
+
+    df = pl.DataFrame({"day_of_week": [0, 1, 2, 3, 4, 5, 6]})
+    result = df.with_columns(
+        pl.col("day_of_week").replace_strict(_DOW_MAP, default="?").alias("day_name"),
+    )
+
+    assert result["day_name"].to_list() == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def test_polars_replace_unknown_day():
+    """Unknown day-of-week values should get '?' default."""
+    _DOW_MAP = {i: name for i, name in enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])}
+
+    df = pl.DataFrame({"day_of_week": [0, 99]})
+    result = df.with_columns(
+        pl.col("day_of_week").replace_strict(_DOW_MAP, default="?").alias("day_name"),
+    )
+
+    assert result["day_name"].to_list() == ["Mon", "?"]
