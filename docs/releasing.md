@@ -1,79 +1,49 @@
 # Releasing
 
-This project uses [semantic versioning](https://semver.org/) with Git tags as the single source of truth. Pushing a version tag triggers GitHub Actions to build a Docker image, push it to GHCR, and create a GitHub Release with auto-generated notes.
+This project uses [release-please](https://github.com/googleapis/release-please) to automate releases. Merging a release PR is the only manual step.
 
-## Version Scheme
+## How It Works
 
-The project is pre-release (`0.0.x`), meaning:
-
-| Semver | Meaning |
-|--------|---------|
-| `0.0.x` | Pre-release — breaking changes expected, API unstable |
-| `0.x.0` | Beta — API stabilizing, breaking changes possible between minors |
-| `x.0.0` | Stable — follows full semver guarantees |
-
-During pre-release, increment the **patch** version for each release: `0.0.1`, `0.0.2`, `0.0.3`, etc.
-
-## How to Release
-
-### 1. Ensure main is ready
-
-```bash
-# Make sure tests pass
-pytest
-
-# Make sure linting passes
-ruff check src/ tests/
+```
+merge PRs with conventional commits
+         │
+         ▼
+release-please creates/updates a Release PR
+  (version bump in pyproject.toml + CHANGELOG.md)
+         │
+         ▼
+merge the Release PR  ◄── this is the "one click"
+         │
+         ▼
+release-please creates git tag + GitHub Release
+         │
+         ▼
+release.yml triggers: test → Docker build → push to GHCR
 ```
 
-### 2. Bump the version
+## Day-to-Day: Writing Commits
 
-Update the version in two places:
+Use [conventional commit](https://www.conventionalcommits.org/) prefixes in PR titles. When you squash-merge, the PR title becomes the commit message.
 
-```bash
-# pyproject.toml
-sed -i 's/version = ".*"/version = "0.0.2"/' pyproject.toml
+| Prefix | Version bump | Example |
+|--------|-------------|---------|
+| `feat:` | minor (0.0.x → 0.1.0) | `feat: add corridor classifier` |
+| `fix:` | patch (0.0.1 → 0.0.2) | `fix: pipeline crash on null timestamps` |
+| `feat!:` or `fix!:` | major (0.x.x → 1.0.0) | `feat!: redesign API response format` |
+| `docs:`, `chore:`, `ci:`, `refactor:`, `test:` | none (no release) | `docs: update setup guide` |
 
-# src/receiver/app.py (FastAPI version)
-sed -i 's/version=".*"/version="0.0.2"/' src/receiver/app.py
-```
+PR titles are validated by the `lint-pr.yml` workflow — it will fail if the title doesn't follow the convention.
 
-### 3. Commit and tag
+> **Pre-release note:** While on `0.0.x`, `feat:` bumps patch (not minor) thanks to `bump-patch-for-minor-pre-major` in `release-please-config.json`.
 
-```bash
-git add pyproject.toml src/receiver/app.py
-git commit -m "Release v0.0.2"
-git tag v0.0.2
-git push origin main --tags
-```
+## Releasing
 
-Alternatively, trigger from the **GitHub Actions UI**:
-
-1. Go to **Actions** → **Release** workflow
-2. Click **Run workflow**
-3. Enter the version (e.g. `0.0.2`)
-4. Click **Run workflow**
-
-Or create a **GitHub Release** via the UI or `gh` CLI:
-
-```bash
-gh release create v0.0.2 --generate-notes
-```
-
-### 4. CI takes over
-
-The `v0.0.2` tag push triggers `.github/workflows/release.yml`, which:
-
-1. Runs the full test suite
-2. Builds a multi-platform Docker image (amd64 + arm64)
-3. Pushes to GHCR with tags: `0.0.2`, `0.0`, `latest`
-4. Creates a GitHub Release with auto-generated notes from merged PRs
-
-### 5. Verify
-
-- Check the [Actions tab](https://github.com/jflammia/commuteTracker/actions) for the release workflow
-- Check [Packages](https://github.com/jflammia/commuteTracker/pkgs/container/commutetracker) for the new image
-- Check [Releases](https://github.com/jflammia/commuteTracker/releases) for the new release
+1. Merge feature/fix PRs to `main` as usual
+2. release-please automatically opens (or updates) a **Release PR** titled "chore(main): release X.Y.Z"
+3. Review the PR — it contains the version bump and generated changelog
+4. **Merge the Release PR** — this is the one click
+5. release-please creates the `vX.Y.Z` tag and GitHub Release
+6. The tag triggers `release.yml` which builds and pushes the Docker image
 
 ## Docker Image Tags
 
@@ -82,78 +52,51 @@ Each release produces these tags on `ghcr.io/jflammia/commutetracker`:
 | Tag | Example | Meaning |
 |-----|---------|---------|
 | `X.Y.Z` | `0.0.2` | Pinned to exact version (recommended for production) |
-| `X.Y` | `0.0` | Floats to the latest patch in this minor version |
-| `latest` | `latest` | Always the most recent release |
+| `X.Y` | `0.0` | Floats to latest patch in this minor |
+| `latest` | `latest` | Most recent release |
 
-### Pull a specific version
+## Where Version Lives
+
+| Location | Updated by |
+|----------|-----------|
+| `pyproject.toml` | release-please (automatic) |
+| `.release-please-manifest.json` | release-please (automatic) |
+| `CHANGELOG.md` | release-please (automatic) |
+| Git tag (`vX.Y.Z`) | release-please (automatic) |
+| FastAPI OpenAPI docs | Reads from `pyproject.toml` at runtime |
+| Docker `APP_VERSION` | Injected by CI from git tag |
+
+## Manual Release (Escape Hatch)
+
+If you need to release without release-please:
 
 ```bash
-docker pull ghcr.io/jflammia/commutetracker:0.0.2
-```
+# Via GitHub Actions UI
+# Go to Actions → Release → Run workflow → enter version
 
-### Use in docker-compose.yml
-
-Replace the `build: .` directive with a pre-built image:
-
-```yaml
-services:
-  receiver:
-    image: ghcr.io/jflammia/commutetracker:0.0.2
-    # ... rest of config unchanged
+# Via CLI
+gh workflow run release.yml -f version=0.0.2
 ```
 
 ## CI Workflows
 
-### `ci.yml` — Continuous Integration
-
-Runs on every push to `main` and every pull request:
-
-| Job | What it does |
-|-----|-------------|
-| **Lint** | `ruff check` and `ruff format --check` |
-| **Test** | `pip install -e ".[dev]"` then `pytest` |
-| **Docker Build** | Builds the Docker image (no push) to catch Dockerfile issues |
-
-### `release.yml` — Release
-
-Runs when a `v*` tag is pushed:
-
-| Job | What it does |
-|-----|-------------|
-| **Test** | Full test suite (gate before publishing) |
-| **Build & Release** | Docker build + push to GHCR + GitHub Release |
-
-## Where Version Lives
-
-| Location | Purpose | When to update |
-|----------|---------|----------------|
-| `pyproject.toml` → `version` | Python package version | Each release |
-| `src/receiver/app.py` → FastAPI `version` | OpenAPI/Swagger docs | Each release |
-| Git tag (`v0.0.x`) | Release trigger, Docker tag source | Each release |
-| Dockerfile `APP_VERSION` build arg | OCI label, runtime `APP_VERSION` env | Automatic (CI injects from tag) |
-
-## Changelog
-
-Release notes are auto-generated by GitHub from merged PR titles. To improve them:
-
-1. Write clear, descriptive PR titles (these become changelog entries)
-2. Use conventional prefixes when helpful: `feat:`, `fix:`, `docs:`, `refactor:`
-3. GitHub groups PRs by label if you add labels like `enhancement`, `bug`, `documentation`
-
-The auto-generated notes appear on the [Releases page](https://github.com/jflammia/commuteTracker/releases). No manual CHANGELOG.md is needed at the pre-release stage.
+| Workflow | Trigger | What it does |
+|----------|---------|-------------|
+| `ci.yml` | Push/PR to main | Lint + test + Docker build (no push) |
+| `lint-pr.yml` | PR opened/edited | Validates conventional commit in PR title |
+| `release-please.yml` | Push to main | Creates/updates Release PR with changelog + version bump |
+| `release.yml` | `v*` tag push or manual | Test → Docker multi-arch build → push to GHCR |
 
 ## Upgrading on Your Server
 
-After a release, update your Proxmox deployment:
-
 ```bash
-# If using docker-compose with image reference
 docker compose pull
 docker compose up -d
-
-# If building locally from source
-git pull
-git checkout v0.0.2
-docker compose build
-docker compose up -d
 ```
+
+## GitHub Repo Settings
+
+For this flow to work correctly:
+
+1. **Actions permissions**: Settings → Actions → General → enable "Allow GitHub Actions to create and approve pull requests"
+2. **Merge strategy**: Settings → General → Pull Requests → check "Allow squash merging" and set "Default to PR title for squash merge commits"

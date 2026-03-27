@@ -1,0 +1,11 @@
+{
+  "release-type": "python",
+  "packages": {
+    ".": {
+      "package-name": "commute-tracker",
+      "changelog-path": "CHANGELOG.md"
+    }
+  },
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true
+}

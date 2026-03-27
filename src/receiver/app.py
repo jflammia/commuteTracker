@@ -14,6 +14,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from fastapi import FastAPI, Header, Request
@@ -155,7 +156,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Commute Tracker",
-    version="0.0.1",
+    version=pkg_version("commute-tracker"),
     description=(
         "GPS-based commute tracking system. Collects location data from OwnTracks, "
         "segments commutes into transport modes (walk, drive, train, waiting), and "

@@ -58,7 +58,7 @@ python scripts/rebuild_derived.py --date 2026-03-26 --clean --dry-run
 
 ## CI/CD
 
-GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `release.yml` builds multi-arch (amd64+arm64) Docker image to GHCR on version tag push.
+GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.yml` enforces conventional commits in PR titles. `release-please.yml` auto-creates a Release PR with changelog + version bump on each push to main. Merging the Release PR triggers `release.yml` which builds multi-arch (amd64+arm64) Docker image to GHCR. Use conventional commit prefixes in PR titles (`feat:`, `fix:`, `docs:`, etc.).
 
 ## Key Conventions
 
