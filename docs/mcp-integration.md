@@ -1,53 +1,62 @@
 # MCP Integration Guide
 
-The Commute Tracker exposes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for LLM integration. This allows AI assistants to read commute data, analyze classifications, apply corrections, and trigger processing — all through a standardized protocol.
+The Commute Tracker includes a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. Connect Claude (or any MCP client) and it can read your commute data, review classifications, apply corrections, and trigger reprocessing — no scripting needed.
 
-## Connection
+## Connect in 30 Seconds
 
-| Property   | Value                                      |
-|------------|--------------------------------------------|
-| Endpoint   | `http://localhost:8080/mcp`                |
-| Transport  | Streamable HTTP (MCP spec 2025-03-26)      |
-| Auth       | None (network-level access control)        |
-| Stateless  | Yes — no session state between requests    |
-| Response   | JSON                                       |
+You need one thing: the URL of your running Commute Tracker instance with `/mcp/` appended.
+
+**Examples:**
+- Local: `http://localhost:8080/mcp/`
+- Homelab: `http://192.168.1.50:8080/mcp/`
+- Behind reverse proxy: `https://commute.example.com/mcp/`
 
 ### Claude Code
 
-The repo includes `.mcp.json` which auto-configures Claude Code when the server is running:
+If you cloned the repo, it just works — `.mcp.json` auto-connects to `localhost:8080`. For a remote server, edit `.mcp.json` in the repo root:
 
-```bash
-# Start the server, then Claude Code connects automatically
-uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080
+```json
+{
+  "mcpServers": {
+    "commute-tracker": {
+      "type": "url",
+      "url": "https://your-server/mcp/"
+    }
+  }
+}
 ```
-
-No additional configuration needed — Claude Code reads `.mcp.json` from the repo root.
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Open **Settings > Developer > Edit Config** and add:
 
 ```json
 {
   "mcpServers": {
     "commute-tracker": {
-      "url": "http://localhost:8080/mcp/"
+      "type": "url",
+      "url": "https://your-server/mcp/"
     }
   }
 }
 ```
 
-### Remote Access (e.g., via Tailscale)
+### Any Other MCP Client
 
-```json
-{
-  "mcpServers": {
-    "commute-tracker": {
-      "url": "http://your-server:8080/mcp/"
-    }
-  }
-}
-```
+The server uses Streamable HTTP transport (stateless, JSON responses). Point your client at the `/mcp/` URL — no API key, no auth headers, no session management required.
+
+| Property   | Value                                      |
+|------------|--------------------------------------------|
+| Transport  | Streamable HTTP (MCP spec 2025-03-26)      |
+| Auth       | None (use network-level access control)    |
+| Stateless  | Yes — no session state between requests    |
+| Response   | JSON                                       |
+
+### Verify the Connection
+
+Ask Claude: *"What commute data do you have access to?"*
+
+If connected, Claude will read the `commutes://list` resource and tell you about your commutes. If not, it will say it can't access the data.
 
 ---
 

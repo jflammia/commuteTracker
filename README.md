@@ -181,35 +181,56 @@ See [API Reference](docs/api-reference.md) for all endpoints.
 
 ### MCP Server (LLM Integration)
 
-Native [Model Context Protocol](https://modelcontextprotocol.io/) server at `/mcp` — Streamable HTTP, stateless, JSON responses.
+Native [Model Context Protocol](https://modelcontextprotocol.io/) server at `/mcp` — Streamable HTTP, stateless, JSON responses. Connect Claude to your commute data with one config entry.
 
-Add to your MCP client config:
+#### Claude Code
+
+If you cloned the repo, it's already configured — `.mcp.json` in the repo root auto-connects when the server is running. Just start the server:
+
+```bash
+uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080
+```
+
+To connect to a remote instance instead, edit `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "commute-tracker": {
-      "url": "http://localhost:8080/mcp"
+      "type": "url",
+      "url": "https://your-server/mcp/"
     }
   }
 }
 ```
 
-The MCP server provides:
+#### Claude Desktop
+
+Open **Settings > Developer > Edit Config** and add:
+
+```json
+{
+  "mcpServers": {
+    "commute-tracker": {
+      "type": "url",
+      "url": "https://your-server:8080/mcp/"
+    }
+  }
+}
+```
+
+Replace `your-server:8080` with your actual host. If you're running behind a reverse proxy (e.g., `https://commute.example.com`), use that URL with `/mcp/` appended.
+
+#### What You Get
+
+Once connected, Claude has direct access to:
 - **12 resources** — read commutes, segments, points, stats, labels
 - **11 tools** — query data, add labels, review classifications, rebuild, train ML
 - **4 prompts** — analyze commute, optimize departure, review classifications, weekly report
 
-The multi-level label intelligence tools let an LLM review and correct at the right granularity:
+Try asking Claude: *"Review my last 5 commutes and flag any misclassified segments"* — it will use the MCP tools automatically.
 
-| Level | Tool | Use When |
-|-------|------|----------|
-| Low | `analyze_segment` | Deep-dive into one suspicious segment |
-| Mid | `review_commute_labels` | Review all segments in a commute |
-| High | `review_recent_labels` | Batch audit across multiple commutes |
-| Action | `apply_label_corrections` | Apply corrections above a confidence threshold |
-
-See [MCP Integration Guide](docs/mcp-integration.md) for full tool reference and workflows.
+See [MCP Integration Guide](docs/mcp-integration.md) for the full tool reference and LLM labeling workflows.
 
 ### Dashboard
 
