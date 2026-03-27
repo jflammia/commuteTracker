@@ -169,9 +169,9 @@ def test_mcp_accepts_proxy_host_header():
     security = mcp.settings.transport_security
     if security is not None and security.enable_dns_rebinding_protection:
         # If protection is enabled, proxy hostnames must be in the allowed list
-        assert any(
-            h in security.allowed_hosts for h in ["*", "0.0.0.0:*"]
-        ), f"Proxy hosts not allowed: {security.allowed_hosts}"
+        assert any(h in security.allowed_hosts for h in ["*", "0.0.0.0:*"]), (
+            f"Proxy hosts not allowed: {security.allowed_hosts}"
+        )
 
 
 # ── Fix 2: Date filters use GPS tst ─────────────────────────────────────────
