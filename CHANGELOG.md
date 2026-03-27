@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.5](https://github.com/jflammia/commuteTracker/compare/v0.0.4...v0.0.5) (2026-03-27)
+
+
+### Bug Fixes
+
+* default HOME_RADIUS_M to 50m instead of 150m ([6fcc792](https://github.com/jflammia/commuteTracker/commit/6fcc792fc94e34d38fcfd3c921a7b0ea0bf6665a)), closes [#7](https://github.com/jflammia/commuteTracker/issues/7)
+
+
+### Documentation
+
+* add downgrade setting, locked field note, iOS system settings ([94a8eb4](https://github.com/jflammia/commuteTracker/commit/94a8eb4ee7aae7aa8c3600ad2c2cda205ce3e511)), closes [#10](https://github.com/jflammia/commuteTracker/issues/10)
+* add recommended OwnTracks iOS settings for commute tracking ([2a85db2](https://github.com/jflammia/commuteTracker/commit/2a85db2edbb88a68357740ccb596336ba51e5e71)), closes [#9](https://github.com/jflammia/commuteTracker/issues/9)
+* restructure CLAUDE.md for autonomous mobile sessions ([df55a1d](https://github.com/jflammia/commuteTracker/commit/df55a1d3539569cc4e6cd552e6c01cb58d6fb932))
+* update skills with quality gates and release process lessons ([9ecc4e0](https://github.com/jflammia/commuteTracker/commit/9ecc4e02c03f117d21cc12d2eecb319718cf3088))
+
 ## [0.0.4](https://github.com/jflammia/commuteTracker/compare/v0.0.3...v0.0.4) (2026-03-27)
 
 
