@@ -261,6 +261,49 @@ class CommuteService:
             "unsynced_records": self._db.count_unsynced(),
         }
 
+    def get_raw_records(
+        self,
+        limit: int = 10,
+        offset: int = 0,
+        user: str | None = None,
+        device: str | None = None,
+        order: str = "desc",
+    ) -> list[dict]:
+        """Get raw location records from the database.
+
+        Returns records ordered by received_at (newest first by default).
+        Each record includes the full original OwnTracks payload.
+        """
+        import json
+
+        from src.storage.database import LocationRecord
+
+        with self._db.session() as session:
+            query = session.query(LocationRecord)
+            if user:
+                query = query.filter(LocationRecord.user == user)
+            if device:
+                query = query.filter(LocationRecord.device == device)
+            if order == "asc":
+                query = query.order_by(LocationRecord.received_at.asc())
+            else:
+                query = query.order_by(LocationRecord.received_at.desc())
+            query = query.offset(offset).limit(limit)
+            records = query.all()
+
+        return [
+            {
+                "id": r.id,
+                "received_at": r.received_at.isoformat() if r.received_at else None,
+                "msg_type": r.msg_type,
+                "user": r.user,
+                "device": r.device,
+                "payload": json.loads(r.payload),
+                "s3_synced_at": r.s3_synced_at.isoformat() if r.s3_synced_at else None,
+            }
+            for r in records
+        ]
+
     def count_raw_records(
         self,
         since: str | None = None,

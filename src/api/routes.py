@@ -218,6 +218,27 @@ def get_raw_stats():
     return get_service().get_raw_stats()
 
 
+@router.get("/raw/records", tags=["debug"], summary="List raw location records")
+def get_raw_records(
+    limit: int = Query(default=10, ge=1, le=500, description="Number of records to return"),
+    offset: int = Query(default=0, ge=0, description="Number of records to skip"),
+    user: str | None = Query(default=None, description="Filter by OwnTracks user"),
+    device: str | None = Query(default=None, description="Filter by OwnTracks device"),
+    order: str = Query(
+        default="desc",
+        description="Sort order by received_at: 'desc' (newest first) or 'asc' (oldest first)",
+    ),
+):
+    """List raw location records from the database with full OwnTracks payloads.
+
+    Useful for debugging data ingestion. Returns the original JSON payload
+    as received from OwnTracks plus server metadata (received_at, user, device).
+    """
+    return get_service().get_raw_records(
+        limit=limit, offset=offset, user=user, device=device, order=order
+    )
+
+
 @router.get("/raw/count", tags=["analytics"], summary="Count raw records with filters")
 def count_raw_records(
     since: str | None = Query(default=None, description="Start date inclusive (YYYY-MM-DD)"),
