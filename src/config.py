@@ -6,9 +6,12 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Storage paths
-RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", PROJECT_ROOT / "raw"))
-DERIVED_DATA_DIR = Path(os.environ.get("DERIVED_DATA_DIR", PROJECT_ROOT / "derived"))
+# Storage paths: in containers, /data is the writable volume mount.
+# Default to /data/raw and /data/derived when /data exists (container),
+# otherwise use PROJECT_ROOT (local development).
+_DATA_BASE = Path("/data") if Path("/data").is_dir() else PROJECT_ROOT
+RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", _DATA_BASE / "raw"))
+DERIVED_DATA_DIR = Path(os.environ.get("DERIVED_DATA_DIR", _DATA_BASE / "derived"))
 
 # Database
 DATABASE_URL = os.environ.get(
