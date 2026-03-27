@@ -29,29 +29,51 @@ malformed commit means a missed changelog entry or wrong version bump.
 
 ### Types and their release-please effect
 
-| Type | Changelog section | Version bump | When to use |
-|------|------------------|--------------|-------------|
-| `feat` | Features | patch (pre-1.0) | New user-facing functionality |
-| `fix` | Bug Fixes | patch | Bug fix |
-| `docs` | Documentation | none | Docs only |
-| `style` | Styles | none | Formatting, whitespace |
-| `refactor` | Code Refactoring | none | Neither fixes a bug nor adds a feature |
-| `perf` | Performance | none | Performance improvement |
-| `test` | Tests | none | Adding/fixing tests |
-| `build` | Build System | none | Build tooling, dependencies |
-| `ci` | CI | none | CI/CD workflow changes |
-| `chore` | Miscellaneous | none | Anything else (deps, config) |
-| `revert` | Reverts | patch | Revert a previous commit |
+Only `feat` and `fix` appear in the changelog and trigger releases. Other
+types are valid conventional commits (and required by `lint-pr.yml`) but are
+invisible to release-please — they won't create a release or changelog entry.
 
-**Breaking changes:** Add `!` after the type (e.g. `feat!:`) to trigger a
-minor bump (pre-1.0) or major bump (post-1.0). Only use for actual breaking
-changes to the API, config, or data format.
+| Type | In changelog? | Version bump | When to use |
+|------|:------------:|:------------:|-------------|
+| `feat` | yes — "Features" | patch (pre-1.0) | New user-facing functionality |
+| `fix` | yes — "Bug Fixes" | patch | Bug fix |
+| `revert` | yes — "Reverts" | patch | Revert a previous commit |
+| `docs` | no | none | Docs only |
+| `style` | no | none | Formatting, whitespace |
+| `refactor` | no | none | Neither fixes a bug nor adds a feature |
+| `perf` | no | none | Performance improvement |
+| `test` | no | none | Adding/fixing tests |
+| `build` | no | none | Build tooling, dependencies |
+| `ci` | no | none | CI/CD workflow changes |
+| `chore` | no | none | Anything else (deps, config) |
+
+If all commits since the last release are non-feat/fix types, release-please
+will **not** create a Release PR. Those commits accumulate silently and get
+bundled into the next release that includes a `feat:` or `fix:`.
+
+**Breaking changes:** Add `!` after the type (e.g. `feat!:`) or include a
+`BREAKING CHANGE:` footer in the commit body. Either triggers a minor bump
+(pre-1.0) or major bump (post-1.0). Only use for actual breaking changes to
+the API, config, or data format.
 
 ### Scope (optional)
 
 Use a scope when the change is clearly scoped to one area:
 - `feat(api):`, `fix(pipeline):`, `ci(docker):`, `docs(mcp):`
 - Omit the scope for cross-cutting changes
+
+## How Commits Reach release-please
+
+This repo uses **squash merge** for PRs. When a PR is merged, GitHub
+combines all commits into one and uses the **PR title** as the commit
+message. That squashed commit is what release-please parses.
+
+This means:
+- **For PRs**: the PR title is what matters. Individual commits within the
+  PR can be messy — only the PR title needs to be a valid conventional
+  commit. The `lint-pr.yml` workflow enforces this.
+- **For direct pushes to main** (no PR): the commit message itself is
+  parsed. Follow the same conventional commit format.
 
 ## Writing the Commit Message
 
@@ -162,9 +184,18 @@ single GET /api/v1/segments query. Reduces page load from ~20 HTTP
 round-trips to 1.
 ```
 
-**CI change:**
+**CI change (won't appear in changelog or trigger release):**
 ```
 ci: add release-please for one-click automated releases
+```
+
+**Breaking change with footer:**
+```
+feat(api): redesign query endpoint response format
+
+Wrap all query results in a {data: [...], meta: {...}} envelope.
+
+BREAKING CHANGE: /api/v1/query now returns {data, meta} instead of a bare array.
 ```
 
 **Multi-fix commit with body:**
