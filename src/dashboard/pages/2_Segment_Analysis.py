@@ -47,7 +47,7 @@ st.markdown("Each line represents a transport mode segment. Track how long each 
 
 # For a meaningful time-series, group by date + segment_id + transport_mode
 duration_chart_data = seg_df.select(
-    ["date", "segment_id", "transport_mode", "duration_min", "commute_id"]
+    ["date", "segment_id", "transport_mode", "duration_min", "avg_speed_kmh", "commute_id"]
 ).to_pandas()
 
 if not duration_chart_data.empty:
