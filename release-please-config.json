@@ -3,7 +3,8 @@
   "packages": {
     ".": {
       "package-name": "commute-tracker",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false
     }
   },
   "bump-minor-pre-major": true,
