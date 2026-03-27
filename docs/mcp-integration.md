@@ -12,27 +12,38 @@ The Commute Tracker exposes a [Model Context Protocol (MCP)](https://modelcontex
 | Stateless  | Yes — no session state between requests    |
 | Response   | JSON                                       |
 
-### Client Configuration
+### Claude Code
 
-Add to your MCP client config (e.g., Claude Desktop `claude_desktop_config.json`):
+The repo includes `.mcp.json` which auto-configures Claude Code when the server is running:
+
+```bash
+# Start the server, then Claude Code connects automatically
+uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080
+```
+
+No additional configuration needed — Claude Code reads `.mcp.json` from the repo root.
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "commute-tracker": {
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp/"
     }
   }
 }
 ```
 
-For remote access (e.g., via Tailscale):
+### Remote Access (e.g., via Tailscale)
 
 ```json
 {
   "mcpServers": {
     "commute-tracker": {
-      "url": "http://your-server:8080/mcp"
+      "url": "http://your-server:8080/mcp/"
     }
   }
 }

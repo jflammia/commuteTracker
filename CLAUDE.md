@@ -70,6 +70,14 @@ Use the `commit-pr` skill (`.claude/skills/commit-pr/SKILL.md`) for all commits 
 - **Squash merge** feature/fix PRs (PR title becomes the conventional commit release-please parses)
 - **Regular merge** release-please Release PRs (not squash — release-please needs its own commits intact)
 
+## MCP Server
+
+The receiver hosts an MCP server at `/mcp` (Streamable HTTP, stateless, JSON). When the receiver is running locally, Claude Code auto-connects via `.mcp.json` in the repo root. This gives Claude direct access to commute data, label intelligence, and processing tools without needing the REST API.
+
+Start the server first: `uvicorn src.receiver.app:app --host 0.0.0.0 --port 8080`
+
+See `docs/mcp-integration.md` for the full tool/resource reference and LLM labeling workflows.
+
 ## Key Conventions
 
 - Receiver **must always return 200** to OwnTracks (the app retries/backs off on non-200)
