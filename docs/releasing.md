@@ -36,12 +36,23 @@ PR titles are validated by the `lint-pr.yml` workflow — it will fail if the ti
 
 > **Pre-release note:** While on `0.0.x`, `feat:` bumps patch (not minor) thanks to `bump-patch-for-minor-pre-major` in `release-please-config.json`.
 
+## Merge Strategy
+
+This is important — the two PR types use different merge strategies:
+
+| PR type | Merge strategy | Why |
+|---------|---------------|-----|
+| Feature/fix PRs | **Squash merge** | PR title becomes the conventional commit that release-please parses |
+| Release PRs from release-please | **Regular merge** | release-please needs its own structured commits intact on main |
+
+If you squash a Release PR, release-please may not detect the release correctly and could fail to create the tag/GitHub Release.
+
 ## Releasing
 
-1. Merge feature/fix PRs to `main` as usual
+1. Merge feature/fix PRs to `main` with **squash merge** as usual
 2. release-please automatically opens (or updates) a **Release PR** titled "chore(main): release X.Y.Z"
 3. Review the PR — it contains the version bump and generated changelog
-4. **Merge the Release PR** — this is the one click
+4. **Regular merge the Release PR** — this is the one click (not squash!)
 5. release-please creates the `vX.Y.Z` tag and GitHub Release
 6. The tag triggers `release.yml` which builds and pushes the Docker image
 
@@ -98,5 +109,16 @@ docker compose up -d
 
 For this flow to work correctly:
 
-1. **Actions permissions**: Settings → Actions → General → enable "Allow GitHub Actions to create and approve pull requests"
+1. **Actions permissions**: Settings → Actions → General → enable "Allow GitHub Actions to create and approve pull requests" (release-please needs this to create/update Release PRs)
 2. **Merge strategy**: Settings → General → Pull Requests → check "Allow squash merging" and set "Default to PR title for squash merge commits"
+3. **Allow merge commits**: Keep "Allow merge commits" enabled — needed for Release PRs (regular merge, not squash)
+
+## Gotchas
+
+Things that have bitten us before:
+
+- **`include-component-in-tag: false`** in `release-please-config.json` is required. Without it, release-please creates tags like `commute-tracker-v0.0.2` (monorepo format) instead of `v0.0.2`, which doesn't match the `release.yml` trigger pattern.
+- **Squashing a Release PR** breaks the flow. release-please needs its commits intact. Always use regular merge for Release PRs.
+- **CI Docker builds** use plain `docker build` (not buildx) to avoid Docker Hub rate limits on GitHub Actions shared runners. The release workflow still uses buildx+QEMU for multi-arch.
+- **Only `feat:` and `fix:` trigger releases.** If you only push `docs:`, `ci:`, `chore:` commits, release-please won't create a Release PR. Those accumulate until the next `feat:` or `fix:` lands.
+- **Version lives in `pyproject.toml` only.** FastAPI reads it at runtime via `importlib.metadata`. Don't hardcode versions elsewhere.

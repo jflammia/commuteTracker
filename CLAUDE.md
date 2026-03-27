@@ -56,6 +56,8 @@ python scripts/rebuild_derived.py --date 2026-03-26 --clean --dry-run
 
 **Classifier ensemble:** Multiple classifiers (speed, speed_variance, corridor, waypoint) each vote; ensemble.py aggregates. All inherit from `BaseClassifier`.
 
+**MCP server:** Mounted as a sub-app at `/mcp`. FastAPI does not propagate lifespan events to mounted sub-apps, so the MCP session manager is started manually in the parent lifespan (`async with mcp_session_mgr.run():`). If you change the MCP mounting code, preserve this pattern or the MCP endpoint will crash with "Task group is not initialized."
+
 ## CI/CD
 
 GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.yml` enforces conventional commits in PR titles. `release-please.yml` auto-creates a Release PR with changelog + version bump on each push to main. Merging the Release PR triggers `release.yml` which builds multi-arch (amd64+arm64) Docker image to GHCR. Use conventional commit prefixes in PR titles (`feat:`, `fix:`, `docs:`, etc.).
@@ -65,7 +67,8 @@ GitHub Actions: `ci.yml` runs lint + test + docker build on push/PR. `lint-pr.ym
 Use the `commit-pr` skill (`.claude/skills/commit-pr/SKILL.md`) for all commits and PRs. Key rules:
 - **Conventional commits required**: `feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `style:`, `revert:`
 - **Never add AI attribution trailers** — no `Co-Authored-By: Claude`, `Signed-off-by`, or similar. Commits should look like any human-written commit.
-- PR titles follow the same conventional commit format (they become squash-merge commit messages)
+- **Squash merge** feature/fix PRs (PR title becomes the conventional commit release-please parses)
+- **Regular merge** release-please Release PRs (not squash — release-please needs its own commits intact)
 
 ## Key Conventions
 

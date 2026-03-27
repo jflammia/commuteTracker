@@ -1,3 +1,6 @@
+# Local data directory (SQLite DB, created by seed script / server)
+data/
+
 # Raw data - immutable, backed up separately (NAS + cloud)
 raw/
 

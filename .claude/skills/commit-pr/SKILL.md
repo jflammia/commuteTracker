@@ -134,6 +134,10 @@ EOF
 
 ## Writing a PR
 
+Feature/fix PRs are **squash merged** — the PR title becomes the commit
+message on main. Release PRs from release-please are **regular merged**
+(not squash). Never squash a Release PR.
+
 ### Title
 
 The PR title becomes the squash-merge commit message, so it follows the same
