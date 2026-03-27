@@ -15,11 +15,9 @@ speed alone is ambiguous (especially driving vs train).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 import polars as pl
 
-from src.processing.geo_utils import haversine_m
 
 
 def extract_point_features(df: pl.DataFrame) -> pl.DataFrame:

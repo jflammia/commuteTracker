@@ -10,7 +10,6 @@ Override with the COMMUTE_API_URL environment variable.
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 
 import httpx
 import polars as pl

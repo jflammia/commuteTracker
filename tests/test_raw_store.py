@@ -1,12 +1,8 @@
 """Tests for raw JSONL storage."""
 
-import json
-import tempfile
-from pathlib import Path
 
 from src.storage.raw_store import (
     append_record,
-    compute_sha256,
     read_day_file,
     verify_checksum,
     write_checksum,

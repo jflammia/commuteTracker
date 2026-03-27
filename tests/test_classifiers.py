@@ -3,7 +3,6 @@
 import json
 
 import polars as pl
-import pytest
 
 from src.processing.classifiers.base import ModeScores
 from src.processing.classifiers.speed import SpeedClassifier
@@ -11,8 +10,6 @@ from src.processing.classifiers.speed_variance import SpeedVarianceClassifier
 from src.processing.classifiers.waypoint import Waypoint, WaypointClassifier
 from src.processing.classifiers.corridor import Corridor, CorridorClassifier
 from src.processing.classifiers.ensemble import (
-    EnsembleClassifier,
-    ClassifierEntry,
     build_ensemble,
     load_zones_config,
 )

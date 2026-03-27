@@ -4,7 +4,6 @@ Verifies that the MCP server is properly configured with all expected
 tools, resources, and prompts.
 """
 
-import pytest
 
 
 def test_mcp_server_imports():

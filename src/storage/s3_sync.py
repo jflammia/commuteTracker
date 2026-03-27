@@ -11,12 +11,10 @@ Design:
 - Gracefully degrades if S3 is unavailable
 """
 
-import json
 import logging
 import tempfile
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError

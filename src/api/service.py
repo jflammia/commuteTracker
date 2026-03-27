@@ -7,7 +7,7 @@ All methods return plain dicts/lists suitable for JSON serialization.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
 
 import polars as pl

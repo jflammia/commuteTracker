@@ -1,10 +1,6 @@
 """Tests for the API service layer and REST routes."""
 
-import json
-import tempfile
-from pathlib import Path
 
-import polars as pl
 import pytest
 
 from src.api.service import CommuteService
@@ -266,7 +262,6 @@ def _insert_location(db, lat, lon, tst, user="test", device="phone"):
 
 def test_rebuild_with_data_response_shape(tmp_path):
     """Rebuild with real records should return dates_processed as strings and files_written as int."""
-    import time
 
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
     db = Database(db_url)

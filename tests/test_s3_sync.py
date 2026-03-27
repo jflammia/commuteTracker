@@ -1,6 +1,5 @@
 """Tests for S3 sync module (database-to-JSONL export)."""
 
-import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 

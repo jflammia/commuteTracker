@@ -6,7 +6,7 @@ scores from multiple classifiers to make a final decision.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 import polars as pl

@@ -16,7 +16,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
 
 from src.storage.database import Database, SegmentLabelRecord
 
@@ -122,8 +121,8 @@ class LabelStore:
         """
         labels = self.get_labels()
         return {
-            (l.commute_id, l.segment_id): l.corrected_mode
-            for l in labels
+            (lb.commute_id, lb.segment_id): lb.corrected_mode
+            for lb in labels
         }
 
     def label_count(self) -> int:
@@ -132,4 +131,4 @@ class LabelStore:
 
     def export_json(self) -> dict:
         """Export all labels as a JSON-serializable dict."""
-        return {"labels": [l.to_dict() for l in self.get_labels()]}
+        return {"labels": [lb.to_dict() for lb in self.get_labels()]}

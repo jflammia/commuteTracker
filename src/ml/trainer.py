@@ -16,7 +16,7 @@ from pathlib import Path
 
 import polars as pl
 
-from src.ml.features import FEATURE_COLUMNS, build_training_set, extract_point_features
+from src.ml.features import build_training_set, extract_point_features
 from src.ml.model import BaselineModel, ModelMetrics
 from src.storage.derived_store import DerivedStore
 from src.storage.label_store import LabelStore

@@ -1,6 +1,5 @@
 """Tests for geographic utility functions."""
 
-import math
 
 from src.processing.geo_utils import haversine_m, in_geofence, speed_kmh
 

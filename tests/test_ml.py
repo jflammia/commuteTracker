@@ -1,7 +1,5 @@
 """Tests for ML feature engineering and baseline model."""
 
-import math
-from pathlib import Path
 
 import polars as pl
 import pytest
@@ -152,7 +150,7 @@ def test_std():
 # --- Model (requires scikit-learn) ---
 
 def test_model_train_and_predict():
-    sklearn = pytest.importorskip("sklearn")
+    pytest.importorskip("sklearn")
 
     from src.ml.model import BaselineModel
 
@@ -174,7 +172,7 @@ def test_model_train_and_predict():
 
 
 def test_model_score_protocol():
-    sklearn = pytest.importorskip("sklearn")
+    pytest.importorskip("sklearn")
 
     from src.ml.model import BaselineModel
     from src.processing.classifiers.base import ModeScores
@@ -202,7 +200,7 @@ def test_model_untrained_returns_empty_scores():
 
 
 def test_model_save_and_load(tmp_path):
-    sklearn = pytest.importorskip("sklearn")
+    pytest.importorskip("sklearn")
 
     from src.ml.model import BaselineModel
 
@@ -231,7 +229,7 @@ def test_model_save_and_load(tmp_path):
 
 
 def test_model_too_few_samples():
-    sklearn = pytest.importorskip("sklearn")
+    pytest.importorskip("sklearn")
 
     from src.ml.model import BaselineModel
 
@@ -245,7 +243,7 @@ def test_model_too_few_samples():
 
 
 def test_model_feature_importances():
-    sklearn = pytest.importorskip("sklearn")
+    pytest.importorskip("sklearn")
 
     from src.ml.model import BaselineModel
 
