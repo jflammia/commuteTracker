@@ -35,7 +35,6 @@ def detect_commutes(
 
     lats = df["lat"].to_list()
     lons = df["lon"].to_list()
-    timestamps = df["timestamp"].to_list()
     local_timestamps = df["timestamp_local"].to_list()
 
     at_home = [

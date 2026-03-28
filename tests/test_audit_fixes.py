@@ -763,3 +763,47 @@ def test_commute_id_uses_local_date():
     # Commute ID should use local date (2024-03-26), not UTC date (2024-03-27)
     cid = commute_ids[0]
     assert cid.startswith("2024-03-26"), f"Expected local date 2024-03-26, got commute ID: {cid}"
+
+
+def test_parquet_file_named_by_local_date(db, derived_dir):
+    """Parquet files must be named by local date, not UTC date.
+
+    A point at 03:00 UTC in EDT (23:00 previous day) should land in the
+    previous day's Parquet file.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from pathlib import Path
+
+    # 2024-03-27 03:30 UTC = 2024-03-26 23:30 EDT
+    tst = 1711510200
+    _insert_location(db, 40.7128, -74.0060, tst)
+
+    with _pipeline_config():
+        process_from_db(db, output_dir=derived_dir)
+
+    # Should create a file for 2024-03-26 (local date), not 2024-03-27 (UTC date)
+    files = list(Path(derived_dir).rglob("*.parquet"))
+    assert len(files) == 1
+    assert "2024-03-26" in files[0].name, f"Expected local date 2024-03-26, got {files[0].name}"
+
+
+def test_pipeline_filter_interprets_dates_as_local_tz(db, derived_dir):
+    """since/until filters must be interpreted as local timezone dates.
+
+    When filtering for 2024-03-26 in America/New_York, the range should be
+    2024-03-26 00:00 EDT (04:00 UTC) to 2024-03-26 23:59 EDT (03:59 UTC next day).
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    # Point at 2024-03-26 12:00 EDT = 2024-03-26 16:00 UTC (tst=1711468800)
+    tst_in_range = 1711468800
+    _insert_location(db, 40.7128, -74.0060, tst_in_range)
+
+    # Point at 2024-03-26 03:00 UTC = 2024-03-25 23:00 EDT (should be EXCLUDED)
+    tst_out_of_range = 1711422000
+    _insert_location(db, 40.7128, -74.0060, tst_out_of_range)
+
+    with _pipeline_config():
+        results = process_from_db(
+            db, output_dir=derived_dir, filters={"since": "2024-03-26", "until": "2024-03-26"}
+        )
+    assert results["total_records"] == 1
