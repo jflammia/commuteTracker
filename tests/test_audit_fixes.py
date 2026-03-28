@@ -12,6 +12,8 @@ Covers:
 9. MCP server works behind reverse proxy (no Host header rejection)
 10. .mcp.json uses correct transport type for Claude Code (#5)
 11. Container data paths resolve to writable volume (#6)
+12. Home geofence radius default 50m (#7)
+13. Timezone-aware timestamps with GPS-derived timezone (#11)
 """
 
 import time
@@ -843,3 +845,62 @@ def test_health_includes_timezone(client):
     assert "timezone" in data
     assert isinstance(data["timezone"], str)
     assert len(data["timezone"]) > 0
+
+
+def test_full_pipeline_timezone_integration(db, derived_dir):
+    """End-to-end: pipeline produces tz-aware data with correct local dates.
+
+    Verifies the complete flow: raw records -> enrichment (timezone resolution)
+    -> commute detection (local date IDs) -> Parquet (local date filenames)
+    -> DuckDB queries (local date filtering).
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from pathlib import Path
+
+    # Seed a commute at 2024-03-26 20:00 EDT = 2024-03-27 00:00 UTC
+    # All points are on UTC March 27, but local March 26
+    base_tst = 1711497600  # 2024-03-27 00:00 UTC = 2024-03-26 20:00 EDT
+
+    # At home
+    for i in range(3):
+        _insert_location(db, HOME[0], HOME[1], base_tst + i * 10)
+    # Transit
+    for i in range(1, 11):
+        frac = i / 10
+        lat = HOME[0] + (WORK[0] - HOME[0]) * frac
+        lon = HOME[1] + (WORK[1] - HOME[1]) * frac
+        _insert_location(db, lat, lon, base_tst + 30 + i * 10)
+    # At work
+    for i in range(3):
+        _insert_location(db, WORK[0], WORK[1], base_tst + 140 + i * 10)
+
+    results = _rebuild_all(db, derived_dir)
+
+    # 1. Parquet file should be named for local date (March 26)
+    files = list(Path(derived_dir).rglob("*.parquet"))
+    assert any("2024-03-26" in f.name for f in files), (
+        f"Expected Parquet file for 2024-03-26 (local), got: {[f.name for f in files]}"
+    )
+
+    # 2. Commute ID should use local date
+    if results["commutes_found"] > 0:
+        store = DerivedStore(derived_dir)
+        commutes = store.get_commutes()
+        if not commutes.is_empty():
+            cid = commutes["commute_id"][0]
+            assert "2024-03-26" in cid, f"Commute ID should use local date: {cid}"
+
+    # 3. Daily summary for local date should return data
+    store = DerivedStore(derived_dir)
+    summary = store.get_daily_summary("2024-03-26")
+    assert not summary.is_empty(), "Daily summary for local date should have data"
+
+    # 4. Timestamps should be tz-aware (timezone-aware, not naive)
+    ts_dtype = summary["timestamp"].dtype
+    assert isinstance(ts_dtype, pl.Datetime) and ts_dtype.time_zone is not None, (
+        f"Expected tz-aware timestamp, got: {ts_dtype}"
+    )
+
+    # 5. timezone column should be present
+    assert "timezone" in summary.columns
+    assert "timestamp_local" in summary.columns
