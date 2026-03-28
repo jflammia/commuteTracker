@@ -11,6 +11,10 @@ derived/
 .env
 .env.local
 
+# Coverage
+.coverage
+htmlcov/
+
 # Python
 __pycache__/
 *.py[cod]
