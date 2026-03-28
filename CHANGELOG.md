@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.6](https://github.com/jflammia/commuteTracker/compare/v0.0.5...v0.0.6) (2026-03-28)
+
+
+### Features
+
+* **dashboard:** show build version and git commit in sidebar ([dea475d](https://github.com/jflammia/commuteTracker/commit/dea475de3ea67fc9e4b2caa83571955a5a2abe70))
+* timezone-aware timestamps with GPS-derived timezone ([#13](https://github.com/jflammia/commuteTracker/issues/13)) ([1f89c8f](https://github.com/jflammia/commuteTracker/commit/1f89c8ffa30610edaede8093704fcb53587273e3))
+
 ## [0.0.5](https://github.com/jflammia/commuteTracker/compare/v0.0.4...v0.0.5) (2026-03-27)
 
 
