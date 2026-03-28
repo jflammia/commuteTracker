@@ -19,3 +19,17 @@ st.markdown(
 )
 
 st.sidebar.success("Select a page above.")
+
+# Build info from backend
+try:
+    from src.dashboard.api_client import get_health
+
+    health = get_health()
+    version = health.get("version", "unknown")
+    commit = health.get("git_commit", "")
+    build_label = f"Build: v{version}"
+    if commit:
+        build_label += f" ({commit[:7]})"
+    st.sidebar.caption(build_label)
+except Exception:
+    st.sidebar.caption("Build: unavailable")

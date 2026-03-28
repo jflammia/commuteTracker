@@ -5,6 +5,9 @@ Thin HTTP layer over CommuteService. All business logic lives in service.py.
 
 from __future__ import annotations
 
+import os
+from importlib.metadata import version as pkg_version
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -125,7 +128,10 @@ class ApplyCorrectionsRequest(BaseModel):
 @router.get("/health", tags=["system"], summary="System health check")
 def api_health():
     """Returns system status, record counts, label count, and available dates."""
-    return get_service().health()
+    data = get_service().health()
+    data["version"] = pkg_version("commute-tracker")
+    data["git_commit"] = os.environ.get("GIT_COMMIT", "")
+    return data
 
 
 # ── Commutes ──────────────────────────────────────────────────────────────────

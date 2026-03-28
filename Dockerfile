@@ -6,9 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Version injected at build time by CI (from git tag)
+# Version and commit injected at build time by CI
 ARG APP_VERSION=dev
-ENV APP_VERSION=${APP_VERSION}
+ARG GIT_COMMIT=""
+ENV APP_VERSION=${APP_VERSION} \
+    GIT_COMMIT=${GIT_COMMIT}
 
 # Install dependencies first (better layer caching - only rebuilds when deps change)
 COPY pyproject.toml .
