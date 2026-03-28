@@ -6,6 +6,14 @@ import altair as alt
 
 from src.dashboard.api_client import get_commutes, get_all_segments, get_stats
 
+# Detect browser timezone for display
+try:
+    display_tz = st.context.timezone
+except (AttributeError, KeyError):
+    from src.config import TIMEZONE
+
+    display_tz = TIMEZONE
+
 st.title("Trends & Patterns")
 st.markdown("Long-term view of your commute: how are things changing over weeks and months?")
 
@@ -16,8 +24,11 @@ if commutes.is_empty():
     st.stop()
 
 commutes = commutes.with_columns(
-    pl.col("start_time").dt.date().alias("date"),
-    pl.col("start_time").dt.weekday().alias("day_of_week"),
+    pl.col("start_time").dt.convert_time_zone(display_tz).alias("start_time_local"),
+)
+commutes = commutes.with_columns(
+    pl.col("start_time_local").dt.date().alias("date"),
+    pl.col("start_time_local").dt.weekday().alias("day_of_week"),
 )
 
 # --- Direction filter ---
@@ -31,7 +42,7 @@ st.subheader("Commute Duration Over Time")
 
 time_df = commutes.sort("start_time").select(
     [
-        "start_time",
+        "start_time_local",
         "duration_min",
         "commute_direction",
         "date",
@@ -47,7 +58,7 @@ points = (
     alt.Chart(time_pandas)
     .mark_circle(size=60, opacity=0.5)
     .encode(
-        x=alt.X("start_time:T", title="Date"),
+        x=alt.X("start_time_local:T", title="Date"),
         y=alt.Y("duration_min:Q", title="Duration (min)"),
         color=alt.Color("commute_direction:N", title="Direction"),
         tooltip=["date", "duration_min", "commute_direction"],
@@ -58,7 +69,7 @@ line = (
     alt.Chart(time_pandas)
     .mark_line(strokeWidth=2.5, color="#e67e22")
     .encode(
-        x=alt.X("start_time:T"),
+        x=alt.X("start_time_local:T"),
         y=alt.Y("rolling_avg:Q"),
     )
 )

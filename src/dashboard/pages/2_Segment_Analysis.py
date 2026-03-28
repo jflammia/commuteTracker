@@ -6,6 +6,14 @@ import altair as alt
 
 from src.dashboard.api_client import get_commutes, get_all_segments
 
+# Detect browser timezone for display
+try:
+    display_tz = st.context.timezone
+except (AttributeError, KeyError):
+    from src.config import TIMEZONE
+
+    display_tz = TIMEZONE
+
 st.title("Segment Analysis")
 st.markdown("How does each leg of your commute behave over time? Which segments are most variable?")
 

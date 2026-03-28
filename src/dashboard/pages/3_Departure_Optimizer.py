@@ -6,6 +6,14 @@ import altair as alt
 
 from src.dashboard.api_client import get_commutes
 
+# Detect browser timezone for display
+try:
+    display_tz = st.context.timezone
+except (AttributeError, KeyError):
+    from src.config import TIMEZONE
+
+    display_tz = TIMEZONE
+
 st.title("Departure Time Optimizer")
 st.markdown(
     "Discover how your departure time affects total commute duration. "
@@ -18,12 +26,15 @@ if commutes.is_empty():
     st.warning("No commute data found. Process some data first.")
     st.stop()
 
-# Add departure hour and day of week
+# Add departure hour and day of week (convert to display timezone first)
 commutes = commutes.with_columns(
-    pl.col("start_time").dt.hour().alias("departure_hour"),
-    pl.col("start_time").dt.minute().alias("departure_minute"),
-    pl.col("start_time").dt.weekday().alias("day_of_week"),  # 0=Mon, 6=Sun
-    pl.col("start_time").dt.date().cast(pl.Utf8).alias("date"),
+    pl.col("start_time").dt.convert_time_zone(display_tz).alias("start_time_local"),
+)
+commutes = commutes.with_columns(
+    pl.col("start_time_local").dt.hour().alias("departure_hour"),
+    pl.col("start_time_local").dt.minute().alias("departure_minute"),
+    pl.col("start_time_local").dt.weekday().alias("day_of_week"),  # 0=Mon, 6=Sun
+    pl.col("start_time_local").dt.date().cast(pl.Utf8).alias("date"),
 )
 
 # Decimal hour for scatter plot
