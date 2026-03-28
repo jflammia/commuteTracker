@@ -46,3 +46,6 @@ WORK_RADIUS_M = float(os.environ.get("WORK_RADIUS_M", "150"))
 # Speed thresholds for transport mode classification (km/h)
 WALK_MAX_SPEED = 7.0
 STATIONARY_MAX_SPEED = 1.0
+
+# Fallback timezone when GPS-based resolution fails (ocean, null coordinates)
+TIMEZONE = os.environ.get("TIMEZONE", "America/New_York")

@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn>=0.34",
     "polars>=1.0",
     "duckdb>=1.0",
-    "streamlit>=1.40",
+    "streamlit>=1.41",
     "folium>=0.18",
     "streamlit-folium>=0.22",
     "altair>=5.0",
@@ -16,6 +16,7 @@ dependencies = [
     "boto3>=1.35",
     "sqlalchemy>=2.0",
     "mcp>=1.0",
+    "timezonefinder>=6.0",
 ]
 
 [project.optional-dependencies]
