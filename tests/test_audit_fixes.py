@@ -617,3 +617,100 @@ def test_home_radius_default_is_50m():
 
     assert home_radius == 50.0, f"HOME_RADIUS_M default should be 50, got {home_radius}"
     assert work_radius == 150.0, f"WORK_RADIUS_M default should be 150, got {work_radius}"
+
+
+# ── Fix 13: Timezone-aware timestamps (#11) ─────────────────────────────────
+
+
+def test_enricher_timestamp_is_tz_aware_utc():
+    """Enricher must produce timezone-aware UTC timestamps.
+
+    Naive timestamps caused wrong date grouping and commute IDs when the
+    server timezone differed from the user's timezone.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from src.processing.enricher import enrich
+
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128, 40.7130],
+            "lon": [-74.0060, -74.0062],
+            "tst": [1711440000, 1711440060],
+        }
+    )
+    result = enrich(df)
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")
+
+
+def test_enricher_adds_timezone_column():
+    """Enricher must add a timezone column derived from GPS coordinates.
+
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from src.processing.enricher import enrich
+
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128, 40.7130],
+            "lon": [-74.0060, -74.0062],
+            "tst": [1711440000, 1711440060],
+        }
+    )
+    result = enrich(df)
+    assert "timezone" in result.columns
+    assert result["timezone"][0] == "America/New_York"
+
+
+def test_enricher_adds_timestamp_local():
+    """Enricher must add a timestamp_local column in the point's local timezone.
+
+    timestamp_local is a naive datetime representing local time, used for
+    date grouping and commute ID generation.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from datetime import datetime, timezone as dt_timezone
+    from zoneinfo import ZoneInfo
+
+    from src.processing.enricher import enrich
+
+    tst = 1711440000  # 2024-03-26T08:00:00Z
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128],
+            "lon": [-74.0060],
+            "tst": [tst],
+        }
+    )
+    result = enrich(df)
+    assert "timestamp_local" in result.columns
+
+    # Verify the local time matches manual conversion
+    utc_dt = datetime.fromtimestamp(tst, tz=dt_timezone.utc)
+    expected_local = utc_dt.astimezone(ZoneInfo("America/New_York")).replace(tzinfo=None)
+    actual_local = result["timestamp_local"][0]
+    assert actual_local == expected_local
+
+
+def test_enricher_late_night_utc_correct_local_date():
+    """A point at 03:00 UTC should have a local date of the previous day in EDT.
+
+    This is the core bug: 03:00 UTC = 23:00 EDT previous day, so the local
+    date should be the day before the UTC date.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from datetime import date
+
+    from src.processing.enricher import enrich
+
+    # 2024-03-27 03:00:00 UTC = 2024-03-26 23:00:00 EDT
+    tst = 1711508400
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128],
+            "lon": [-74.0060],
+            "tst": [tst],
+        }
+    )
+    result = enrich(df)
+    local_date = result["timestamp_local"].dt.date()[0]
+    assert local_date == date(2024, 3, 26), f"Expected 2024-03-26, got {local_date}"

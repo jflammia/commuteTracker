@@ -5,18 +5,26 @@ Takes a Polars DataFrame of raw location records and adds:
 - Distance from previous point
 - Time delta from previous point
 - Stationary/moving flag
+- Timezone (IANA string from GPS coordinates)
+- Timezone-aware UTC timestamp
+- Local timestamp for date grouping
 """
+
+from datetime import datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 
 import polars as pl
 
 from src.processing.geo_utils import haversine_m, speed_kmh
+from src.processing.tz_resolver import resolve_timezones
 
 
 def enrich(df: pl.DataFrame) -> pl.DataFrame:
     """Add computed columns to a DataFrame of location records.
 
     Expects columns: lat, lon, tst (unix timestamp).
-    Adds: timestamp, distance_m, time_delta_s, speed_kmh, is_stationary.
+    Adds: timestamp (UTC), timezone, timestamp_local, distance_m,
+          time_delta_s, speed_kmh, is_stationary.
     """
     if df.is_empty():
         return df
@@ -24,16 +32,26 @@ def enrich(df: pl.DataFrame) -> pl.DataFrame:
     # Ensure sorted by timestamp
     df = df.sort("tst")
 
-    # Convert unix timestamp to datetime
+    # Convert unix timestamp to timezone-aware UTC datetime
     if "timestamp" not in df.columns:
         df = df.with_columns(
-            pl.from_epoch("tst", time_unit="s").alias("timestamp"),
+            pl.from_epoch("tst", time_unit="s").dt.replace_time_zone("UTC").alias("timestamp"),
         )
 
+    # Resolve timezone from GPS coordinates
     lats = df["lat"].to_list()
     lons = df["lon"].to_list()
     tsts = df["tst"].to_list()
+    timezones = resolve_timezones(lats, lons)
 
+    # Compute local timestamps (naive datetime in each point's local timezone)
+    local_times = []
+    for tst_val, tz_str in zip(tsts, timezones):
+        utc_dt = datetime.fromtimestamp(tst_val, tz=dt_timezone.utc)
+        local_dt = utc_dt.astimezone(ZoneInfo(tz_str))
+        local_times.append(local_dt.replace(tzinfo=None))
+
+    # Compute distance, time delta, speed
     distances = [0.0]
     time_deltas = [0.0]
     speeds = [0.0]
@@ -46,6 +64,8 @@ def enrich(df: pl.DataFrame) -> pl.DataFrame:
         speeds.append(speed_kmh(d, dt))
 
     df = df.with_columns(
+        pl.Series("timezone", timezones),
+        pl.Series("timestamp_local", local_times),
         pl.Series("distance_m", distances),
         pl.Series("time_delta_s", time_deltas),
         pl.Series("speed_kmh", speeds),
