@@ -27,6 +27,14 @@ from src.dashboard.api_client import (
     export_labels,
 )
 
+# Detect browser timezone for display
+try:
+    display_tz = st.context.timezone
+except (AttributeError, KeyError):
+    from src.config import TIMEZONE
+
+    display_tz = TIMEZONE
+
 TRANSPORT_MODES = ["stationary", "waiting", "walking", "driving", "train"]
 MODE_COLORS = {
     "walking": "#2ecc71",
@@ -171,9 +179,12 @@ except ImportError:
 st.subheader("Speed Timeline")
 
 if "speed_kmh" in points.columns and "timestamp" in points.columns:
+    points = points.with_columns(
+        pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
+    )
     chart_data = points.select(
         [
-            "timestamp",
+            "display_time",
             "speed_kmh",
             "transport_mode",
             "segment_id",
@@ -191,8 +202,8 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
         seg_rows = chart_data[chart_data["segment_id"] == sid]
         seg_bands.append(
             {
-                "start": seg_rows["timestamp"].min(),
-                "end": seg_rows["timestamp"].max(),
+                "start": seg_rows["display_time"].min(),
+                "end": seg_rows["display_time"].max(),
                 "mode": seg_rows["transport_mode"].iloc[0],
                 "segment_id": int(sid),
             }
@@ -223,7 +234,7 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
         alt.Chart(chart_data)
         .mark_line(strokeWidth=1.5)
         .encode(
-            x=alt.X("timestamp:T", title="Time"),
+            x=alt.X("display_time:T", title="Time"),
             y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
         )
     )
@@ -233,7 +244,7 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
     prev_sid = None
     for _, row in chart_data.iterrows():
         if prev_sid is not None and row["segment_id"] != prev_sid:
-            boundary_times.append({"timestamp": row["timestamp"]})
+            boundary_times.append({"display_time": row["display_time"]})
         prev_sid = row["segment_id"]
 
     if boundary_times:
@@ -241,7 +252,7 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
         rules = (
             alt.Chart(rules_df)
             .mark_rule(strokeDash=[4, 4], color="#333", opacity=0.5)
-            .encode(x="timestamp:T")
+            .encode(x="display_time:T")
         )
         chart = (bg + line + rules).properties(height=250)
     else:

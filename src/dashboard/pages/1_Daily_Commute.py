@@ -5,6 +5,14 @@ import polars as pl
 
 from src.dashboard.api_client import list_dates, get_daily_summary, get_segments
 
+# Detect browser timezone for display
+try:
+    display_tz = st.context.timezone
+except (AttributeError, KeyError):
+    from src.config import TIMEZONE
+
+    display_tz = TIMEZONE
+
 st.title("Daily Commute")
 
 dates = list_dates()
@@ -138,11 +146,15 @@ st.subheader("Speed Over Time")
 if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
     import altair as alt
 
-    chart_df = day_df.select(["timestamp", "speed_kmh"]).to_pandas()
+    day_df = day_df.with_columns(
+        pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
+    )
+
+    chart_df = day_df.select(["display_time", "speed_kmh"]).to_pandas()
 
     if has_commutes:
         chart_df_full = day_df.select(
-            ["timestamp", "speed_kmh", "transport_mode", "commute_id"]
+            ["display_time", "speed_kmh", "transport_mode", "commute_id"]
         ).to_pandas()
         chart_df_full["in_commute"] = chart_df_full["commute_id"].notna()
 
@@ -150,7 +162,7 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
             alt.Chart(chart_df_full)
             .mark_line(strokeWidth=1.5)
             .encode(
-                x=alt.X("timestamp:T", title="Time"),
+                x=alt.X("display_time:T", title="Time"),
                 y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
                 color=alt.Color(
                     "transport_mode:N",
@@ -173,7 +185,7 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
             alt.Chart(chart_df)
             .mark_line()
             .encode(
-                x=alt.X("timestamp:T", title="Time"),
+                x=alt.X("display_time:T", title="Time"),
                 y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
             )
             .properties(height=300)

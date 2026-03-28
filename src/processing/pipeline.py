@@ -174,15 +174,19 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
     # Apply date filters using GPS timestamp (tst), not server received_at.
     # This ensures filtering matches the actual GPS recording time.
     if filters:
-        from datetime import datetime, timezone
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
 
+        from src.config import TIMEZONE
+
+        tz = ZoneInfo(TIMEZONE)
         if "since" in filters:
-            since_dt = datetime.strptime(filters["since"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            since_dt = datetime.strptime(filters["since"], "%Y-%m-%d").replace(tzinfo=tz)
             since_tst = int(since_dt.timestamp())
             df = df.filter(pl.col("tst") >= since_tst)
         if "until" in filters:
             until_dt = datetime.strptime(filters["until"], "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59, tzinfo=timezone.utc
+                hour=23, minute=59, second=59, tzinfo=tz
             )
             until_tst = int(until_dt.timestamp())
             df = df.filter(pl.col("tst") <= until_tst)
@@ -208,7 +212,7 @@ def process_from_db(db, output_dir: str | Path | None = None, filters: dict | No
 
     # Write Parquet files grouped by date
     df = df.with_columns(
-        pl.col("timestamp").dt.date().alias("date"),
+        pl.col("timestamp_local").dt.date().alias("date"),
     )
 
     for date_val in df["date"].unique().sort().to_list():
@@ -253,15 +257,25 @@ def process_jsonl(jsonl_path: str | Path, output_dir: str | Path | None = None) 
         commute_ids = df["commute_id"].drop_nulls().unique()
         results["commutes_found"] = len(commute_ids)
 
-    # Derive output path from input filename
-    stem = jsonl_path.stem  # e.g. "2026-03-26"
-    year = stem[:4]
-    month = stem[5:7]
-    parquet_dir = output_dir / year / month
-    parquet_dir.mkdir(parents=True, exist_ok=True)
-    parquet_path = parquet_dir / f"{stem}.parquet"
+    # Group by local date and write one Parquet per day
+    df = df.with_columns(
+        pl.col("timestamp_local").dt.date().alias("date"),
+    )
 
-    df.write_parquet(parquet_path)
-    results["files_written"].append(str(parquet_path))
+    for date_val in df["date"].unique().sort().to_list():
+        day_df = df.filter(pl.col("date") == date_val)
+        date_str = str(date_val)
+        year = date_str[:4]
+        month = date_str[5:7]
+
+        parquet_dir = output_dir / year / month
+        parquet_dir.mkdir(parents=True, exist_ok=True)
+        parquet_path = parquet_dir / f"{date_str}.parquet"
+
+        day_df = day_df.drop("date")
+        day_df.write_parquet(parquet_path)
+
+        results["files_written"].append(str(parquet_path))
+        logger.info(f"Wrote {parquet_path} ({len(day_df)} records)")
 
     return results

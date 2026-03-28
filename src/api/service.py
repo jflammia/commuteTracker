@@ -219,6 +219,44 @@ class CommuteService:
             output_dir=self._derived_dir,
             filters=filters if filters else None,
         )
+
+        # Migrate orphaned labels: commute IDs may change when dates shift
+        # from UTC to local timezone grouping
+        try:
+            import re
+            from datetime import timedelta
+
+            new_commute_ids = set()
+            if results.get("commutes_found", 0) > 0:
+                new_data = self._derived_store.get_commutes()
+                if not new_data.is_empty():
+                    new_commute_ids = set(new_data["commute_id"].to_list())
+
+            if new_commute_ids:
+                all_labels = self._label_store.get_labels()
+                labeled_cids = {lb.commute_id for lb in all_labels}
+                orphaned = labeled_cids - new_commute_ids
+
+                if orphaned:
+                    id_map: dict[str, str] = {}
+                    for old_id in orphaned:
+                        match = re.match(r"(\d{4}-\d{2}-\d{2})-(morning|evening)", old_id)
+                        if not match:
+                            continue
+                        old_date_str, direction = match.groups()
+                        old_date = date.fromisoformat(old_date_str)
+                        for delta in [-1, 1]:
+                            candidate_date = old_date + timedelta(days=delta)
+                            candidate_id = f"{candidate_date}-{direction}"
+                            if candidate_id in new_commute_ids:
+                                id_map[old_id] = candidate_id
+                                break
+                    if id_map:
+                        self._label_store.migrate_commute_ids(id_map)
+                        logger.info(f"Migrated labels: {id_map}")
+        except Exception:
+            logger.exception("Label migration failed (non-fatal)")
+
         return {
             "dry_run": False,
             "filters": filters,

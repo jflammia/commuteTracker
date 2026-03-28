@@ -12,6 +12,8 @@ Covers:
 9. MCP server works behind reverse proxy (no Host header rejection)
 10. .mcp.json uses correct transport type for Claude Code (#5)
 11. Container data paths resolve to writable volume (#6)
+12. Home geofence radius default 50m (#7)
+13. Timezone-aware timestamps with GPS-derived timezone (#11)
 """
 
 import time
@@ -617,3 +619,288 @@ def test_home_radius_default_is_50m():
 
     assert home_radius == 50.0, f"HOME_RADIUS_M default should be 50, got {home_radius}"
     assert work_radius == 150.0, f"WORK_RADIUS_M default should be 150, got {work_radius}"
+
+
+# ── Fix 13: Timezone-aware timestamps (#11) ─────────────────────────────────
+
+
+def test_enricher_timestamp_is_tz_aware_utc():
+    """Enricher must produce timezone-aware UTC timestamps.
+
+    Naive timestamps caused wrong date grouping and commute IDs when the
+    server timezone differed from the user's timezone.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from src.processing.enricher import enrich
+
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128, 40.7130],
+            "lon": [-74.0060, -74.0062],
+            "tst": [1711440000, 1711440060],
+        }
+    )
+    result = enrich(df)
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")
+
+
+def test_enricher_adds_timezone_column():
+    """Enricher must add a timezone column derived from GPS coordinates.
+
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from src.processing.enricher import enrich
+
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128, 40.7130],
+            "lon": [-74.0060, -74.0062],
+            "tst": [1711440000, 1711440060],
+        }
+    )
+    result = enrich(df)
+    assert "timezone" in result.columns
+    assert result["timezone"][0] == "America/New_York"
+
+
+def test_enricher_adds_timestamp_local():
+    """Enricher must add a timestamp_local column in the point's local timezone.
+
+    timestamp_local is a naive datetime representing local time, used for
+    date grouping and commute ID generation.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from datetime import datetime, timezone as dt_timezone
+    from zoneinfo import ZoneInfo
+
+    from src.processing.enricher import enrich
+
+    tst = 1711440000  # 2024-03-26T08:00:00Z
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128],
+            "lon": [-74.0060],
+            "tst": [tst],
+        }
+    )
+    result = enrich(df)
+    assert "timestamp_local" in result.columns
+
+    # Verify the local time matches manual conversion
+    utc_dt = datetime.fromtimestamp(tst, tz=dt_timezone.utc)
+    expected_local = utc_dt.astimezone(ZoneInfo("America/New_York")).replace(tzinfo=None)
+    actual_local = result["timestamp_local"][0]
+    assert actual_local == expected_local
+
+
+def test_enricher_late_night_utc_correct_local_date():
+    """A point at 03:00 UTC should have a local date of the previous day in EDT.
+
+    This is the core bug: 03:00 UTC = 23:00 EDT previous day, so the local
+    date should be the day before the UTC date.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from datetime import date
+
+    from src.processing.enricher import enrich
+
+    # 2024-03-27 03:00:00 UTC = 2024-03-26 23:00:00 EDT
+    tst = 1711508400
+    df = pl.DataFrame(
+        {
+            "lat": [40.7128],
+            "lon": [-74.0060],
+            "tst": [tst],
+        }
+    )
+    result = enrich(df)
+    local_date = result["timestamp_local"].dt.date()[0]
+    assert local_date == date(2024, 3, 26), f"Expected 2024-03-26, got {local_date}"
+
+
+def test_commute_id_uses_local_date():
+    """Commute IDs must use local date, not UTC date.
+
+    A commute starting at 03:00 UTC in America/New_York (23:00 EDT previous
+    day) should have the previous day's date in its commute ID.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from unittest.mock import patch as _patch
+
+    # Base time: 2024-03-27 03:00 UTC = 2024-03-26 23:00 EDT
+    base_tst = 1711508400
+
+    # Build points: at home, transit, at work (all in same UTC "day" March 27)
+    rows = []
+    # At home (3 points)
+    for i in range(3):
+        rows.append({"_type": "location", "lat": HOME[0], "lon": HOME[1], "tst": base_tst + i * 10})
+    # Transit (10 points)
+    for i in range(1, 11):
+        frac = i / 10
+        lat = HOME[0] + (WORK[0] - HOME[0]) * frac
+        lon = HOME[1] + (WORK[1] - HOME[1]) * frac
+        rows.append({"_type": "location", "lat": lat, "lon": lon, "tst": base_tst + 30 + i * 10})
+    # At work (3 points)
+    for i in range(3):
+        rows.append(
+            {"_type": "location", "lat": WORK[0], "lon": WORK[1], "tst": base_tst + 140 + i * 10}
+        )
+
+    df = pl.DataFrame(rows)
+    with _patch.multiple(
+        "src.processing.pipeline",
+        HOME_LAT=HOME[0],
+        HOME_LON=HOME[1],
+        HOME_RADIUS_M=200.0,
+        WORK_LAT=WORK[0],
+        WORK_LON=WORK[1],
+        WORK_RADIUS_M=200.0,
+    ):
+        result = process_locations(df)
+
+    commute_ids = result["commute_id"].drop_nulls().unique().to_list()
+    assert len(commute_ids) == 1
+
+    # Commute ID should use local date (2024-03-26), not UTC date (2024-03-27)
+    cid = commute_ids[0]
+    assert cid.startswith("2024-03-26"), f"Expected local date 2024-03-26, got commute ID: {cid}"
+
+
+def test_parquet_file_named_by_local_date(db, derived_dir):
+    """Parquet files must be named by local date, not UTC date.
+
+    A point at 03:00 UTC in EDT (23:00 previous day) should land in the
+    previous day's Parquet file.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from pathlib import Path
+
+    # 2024-03-27 03:30 UTC = 2024-03-26 23:30 EDT
+    tst = 1711510200
+    _insert_location(db, 40.7128, -74.0060, tst)
+
+    with _pipeline_config():
+        process_from_db(db, output_dir=derived_dir)
+
+    # Should create a file for 2024-03-26 (local date), not 2024-03-27 (UTC date)
+    files = list(Path(derived_dir).rglob("*.parquet"))
+    assert len(files) == 1
+    assert "2024-03-26" in files[0].name, f"Expected local date 2024-03-26, got {files[0].name}"
+
+
+def test_pipeline_filter_interprets_dates_as_local_tz(db, derived_dir):
+    """since/until filters must be interpreted as local timezone dates.
+
+    When filtering for 2024-03-26 in America/New_York, the range should be
+    2024-03-26 00:00 EDT (04:00 UTC) to 2024-03-26 23:59 EDT (03:59 UTC next day).
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    # Point at 2024-03-26 12:00 EDT = 2024-03-26 16:00 UTC (tst=1711468800)
+    tst_in_range = 1711468800
+    _insert_location(db, 40.7128, -74.0060, tst_in_range)
+
+    # Point at 2024-03-26 03:00 UTC = 2024-03-25 23:00 EDT (should be EXCLUDED)
+    tst_out_of_range = 1711422000
+    _insert_location(db, 40.7128, -74.0060, tst_out_of_range)
+
+    with _pipeline_config():
+        results = process_from_db(
+            db, output_dir=derived_dir, filters={"since": "2024-03-26", "until": "2024-03-26"}
+        )
+    assert results["total_records"] == 1
+
+
+def test_daily_summary_uses_local_date(db, derived_dir):
+    """get_daily_summary must query by local date, not UTC date.
+
+    A point at 03:30 UTC in EDT (23:30 previous day) should be returned
+    when querying the previous day's local date.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    # 2024-03-27 03:30 UTC = 2024-03-26 23:30 EDT
+    tst = 1711510200
+    _insert_location(db, 40.7128, -74.0060, tst)
+    _rebuild_all(db, derived_dir)
+
+    store = DerivedStore(derived_dir)
+
+    # Query by local date should find the point
+    result = store.get_daily_summary("2024-03-26")
+    assert not result.is_empty(), "Point at 23:30 EDT should be in 2024-03-26 local summary"
+
+    # Query by UTC date should NOT find it (it's in a different local day)
+    result_utc = store.get_daily_summary("2024-03-27")
+    assert result_utc.is_empty(), "Point at 23:30 EDT should NOT be in 2024-03-27 local summary"
+
+
+def test_health_includes_timezone(client):
+    """Health endpoint must include the configured timezone.
+
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "timezone" in data
+    assert isinstance(data["timezone"], str)
+    assert len(data["timezone"]) > 0
+
+
+def test_full_pipeline_timezone_integration(db, derived_dir):
+    """End-to-end: pipeline produces tz-aware data with correct local dates.
+
+    Verifies the complete flow: raw records -> enrichment (timezone resolution)
+    -> commute detection (local date IDs) -> Parquet (local date filenames)
+    -> DuckDB queries (local date filtering).
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from pathlib import Path
+
+    # Seed a commute at 2024-03-26 20:00 EDT = 2024-03-27 00:00 UTC
+    # All points are on UTC March 27, but local March 26
+    base_tst = 1711497600  # 2024-03-27 00:00 UTC = 2024-03-26 20:00 EDT
+
+    # At home
+    for i in range(3):
+        _insert_location(db, HOME[0], HOME[1], base_tst + i * 10)
+    # Transit
+    for i in range(1, 11):
+        frac = i / 10
+        lat = HOME[0] + (WORK[0] - HOME[0]) * frac
+        lon = HOME[1] + (WORK[1] - HOME[1]) * frac
+        _insert_location(db, lat, lon, base_tst + 30 + i * 10)
+    # At work
+    for i in range(3):
+        _insert_location(db, WORK[0], WORK[1], base_tst + 140 + i * 10)
+
+    results = _rebuild_all(db, derived_dir)
+
+    # 1. Parquet file should be named for local date (March 26)
+    files = list(Path(derived_dir).rglob("*.parquet"))
+    assert any("2024-03-26" in f.name for f in files), (
+        f"Expected Parquet file for 2024-03-26 (local), got: {[f.name for f in files]}"
+    )
+
+    # 2. Commute ID should use local date
+    if results["commutes_found"] > 0:
+        store = DerivedStore(derived_dir)
+        commutes = store.get_commutes()
+        if not commutes.is_empty():
+            cid = commutes["commute_id"][0]
+            assert "2024-03-26" in cid, f"Commute ID should use local date: {cid}"
+
+    # 3. Daily summary for local date should return data
+    store = DerivedStore(derived_dir)
+    summary = store.get_daily_summary("2024-03-26")
+    assert not summary.is_empty(), "Daily summary for local date should have data"
+
+    # 4. Timestamps should be tz-aware (timezone-aware, not naive)
+    ts_dtype = summary["timestamp"].dtype
+    assert isinstance(ts_dtype, pl.Datetime) and ts_dtype.time_zone is not None, (
+        f"Expected tz-aware timestamp, got: {ts_dtype}"
+    )
+
+    # 5. timezone column should be present
+    assert "timezone" in summary.columns
+    assert "timestamp_local" in summary.columns

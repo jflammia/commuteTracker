@@ -127,3 +127,22 @@ class LabelStore:
     def export_json(self) -> dict:
         """Export all labels as a JSON-serializable dict."""
         return {"labels": [lb.to_dict() for lb in self.get_labels()]}
+
+    def migrate_commute_ids(self, old_to_new: dict[str, str]) -> int:
+        """Update commute_id on labels where the commute ID changed.
+
+        Returns the number of labels updated.
+        """
+        count = 0
+        with self._db.session() as session:
+            for old_id, new_id in old_to_new.items():
+                updated = (
+                    session.query(SegmentLabelRecord)
+                    .filter(SegmentLabelRecord.commute_id == old_id)
+                    .update({SegmentLabelRecord.commute_id: new_id})
+                )
+                count += updated
+            session.commit()
+        if count:
+            logger.info(f"Migrated {count} label(s) to new commute IDs")
+        return count
