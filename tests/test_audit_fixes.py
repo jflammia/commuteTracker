@@ -807,3 +807,26 @@ def test_pipeline_filter_interprets_dates_as_local_tz(db, derived_dir):
             db, output_dir=derived_dir, filters={"since": "2024-03-26", "until": "2024-03-26"}
         )
     assert results["total_records"] == 1
+
+
+def test_daily_summary_uses_local_date(db, derived_dir):
+    """get_daily_summary must query by local date, not UTC date.
+
+    A point at 03:30 UTC in EDT (23:30 previous day) should be returned
+    when querying the previous day's local date.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    # 2024-03-27 03:30 UTC = 2024-03-26 23:30 EDT
+    tst = 1711510200
+    _insert_location(db, 40.7128, -74.0060, tst)
+    _rebuild_all(db, derived_dir)
+
+    store = DerivedStore(derived_dir)
+
+    # Query by local date should find the point
+    result = store.get_daily_summary("2024-03-26")
+    assert not result.is_empty(), "Point at 23:30 EDT should be in 2024-03-26 local summary"
+
+    # Query by UTC date should NOT find it (it's in a different local day)
+    result_utc = store.get_daily_summary("2024-03-27")
+    assert result_utc.is_empty(), "Point at 23:30 EDT should NOT be in 2024-03-27 local summary"

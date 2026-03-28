@@ -83,12 +83,12 @@ class DerivedStore:
         )
 
     def get_daily_summary(self, date: str) -> pl.DataFrame:
-        """Get all points for a given date (YYYY-MM-DD)."""
+        """Get all points for a given local date (YYYY-MM-DD)."""
         return self.query(
             """
             SELECT *
             FROM commute_data
-            WHERE CAST(timestamp AS DATE) = CAST($1 AS DATE)
+            WHERE CAST(timestamp_local AS DATE) = CAST($1 AS DATE)
             ORDER BY timestamp
             """,
             [date],
