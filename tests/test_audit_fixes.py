@@ -830,3 +830,16 @@ def test_daily_summary_uses_local_date(db, derived_dir):
     # Query by UTC date should NOT find it (it's in a different local day)
     result_utc = store.get_daily_summary("2024-03-27")
     assert result_utc.is_empty(), "Point at 23:30 EDT should NOT be in 2024-03-27 local summary"
+
+
+def test_health_includes_timezone(client):
+    """Health endpoint must include the configured timezone.
+
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "timezone" in data
+    assert isinstance(data["timezone"], str)
+    assert len(data["timezone"]) > 0

@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.api.service import CommuteService
+from src.config import TIMEZONE
 
 router = APIRouter(prefix="/api/v1")
 
@@ -131,6 +132,7 @@ def api_health():
     data = get_service().health()
     data["version"] = pkg_version("commute-tracker")
     data["git_commit"] = os.environ.get("GIT_COMMIT", "")
+    data["timezone"] = TIMEZONE
     return data
 
 
