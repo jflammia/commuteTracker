@@ -36,6 +36,7 @@ def detect_commutes(
     lats = df["lat"].to_list()
     lons = df["lon"].to_list()
     timestamps = df["timestamp"].to_list()
+    local_timestamps = df["timestamp_local"].to_list()
 
     at_home = [
         in_geofence(lat, lon, home_lat, home_lon, home_radius_m) for lat, lon in zip(lats, lons)
@@ -92,7 +93,7 @@ def detect_commutes(
 
             if arrived:
                 commute_counter += 1
-                date_str = timestamps[commute_start_idx].strftime("%Y-%m-%d")
+                date_str = local_timestamps[commute_start_idx].strftime("%Y-%m-%d")
                 cid = f"{date_str}-{direction}"
 
                 # Label all points from departure to arrival

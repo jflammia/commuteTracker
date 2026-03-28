@@ -714,3 +714,52 @@ def test_enricher_late_night_utc_correct_local_date():
     result = enrich(df)
     local_date = result["timestamp_local"].dt.date()[0]
     assert local_date == date(2024, 3, 26), f"Expected 2024-03-26, got {local_date}"
+
+
+def test_commute_id_uses_local_date():
+    """Commute IDs must use local date, not UTC date.
+
+    A commute starting at 03:00 UTC in America/New_York (23:00 EDT previous
+    day) should have the previous day's date in its commute ID.
+    See: https://github.com/jflammia/commuteTracker/issues/11
+    """
+    from unittest.mock import patch as _patch
+
+    # Base time: 2024-03-27 03:00 UTC = 2024-03-26 23:00 EDT
+    base_tst = 1711508400
+
+    # Build points: at home, transit, at work (all in same UTC "day" March 27)
+    rows = []
+    # At home (3 points)
+    for i in range(3):
+        rows.append({"_type": "location", "lat": HOME[0], "lon": HOME[1], "tst": base_tst + i * 10})
+    # Transit (10 points)
+    for i in range(1, 11):
+        frac = i / 10
+        lat = HOME[0] + (WORK[0] - HOME[0]) * frac
+        lon = HOME[1] + (WORK[1] - HOME[1]) * frac
+        rows.append({"_type": "location", "lat": lat, "lon": lon, "tst": base_tst + 30 + i * 10})
+    # At work (3 points)
+    for i in range(3):
+        rows.append(
+            {"_type": "location", "lat": WORK[0], "lon": WORK[1], "tst": base_tst + 140 + i * 10}
+        )
+
+    df = pl.DataFrame(rows)
+    with _patch.multiple(
+        "src.processing.pipeline",
+        HOME_LAT=HOME[0],
+        HOME_LON=HOME[1],
+        HOME_RADIUS_M=200.0,
+        WORK_LAT=WORK[0],
+        WORK_LON=WORK[1],
+        WORK_RADIUS_M=200.0,
+    ):
+        result = process_locations(df)
+
+    commute_ids = result["commute_id"].drop_nulls().unique().to_list()
+    assert len(commute_ids) == 1
+
+    # Commute ID should use local date (2024-03-26), not UTC date (2024-03-27)
+    cid = commute_ids[0]
+    assert cid.startswith("2024-03-26"), f"Expected local date 2024-03-26, got commute ID: {cid}"
