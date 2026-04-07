@@ -5,6 +5,7 @@ import polars as pl
 import altair as alt
 
 from src.dashboard.api_client import get_commutes, get_all_segments
+from src.dashboard.units import KMH_TO_MPH, M_TO_MI
 
 st.title("Segment Analysis")
 st.markdown("How does each leg of your commute behave over time? Which segments are most variable?")
@@ -41,8 +42,11 @@ st.markdown(
 )
 
 # For a meaningful time-series, group by date + segment_id + transport_mode
+seg_df = seg_df.with_columns(
+    (pl.col("avg_speed_kmh") * KMH_TO_MPH).round(1).alias("avg_speed_mph"),
+)
 duration_chart_data = seg_df.select(
-    ["date", "segment_id", "transport_mode", "duration_min", "avg_speed_kmh", "commute_id"]
+    ["date", "segment_id", "transport_mode", "duration_min", "avg_speed_mph", "commute_id"]
 ).to_pandas()
 
 if not duration_chart_data.empty:
@@ -68,7 +72,7 @@ if not duration_chart_data.empty:
                     range=["#2ecc71", "#3498db", "#e74c3c", "#f39c12", "#95a5a6"],
                 ),
             ),
-            tooltip=["date", "segment_label", "duration_min", "avg_speed_kmh"],
+            tooltip=["date", "segment_label", "duration_min", "avg_speed_mph"],
             strokeDash=alt.StrokeDash("segment_id:N", legend=None),
         )
         .properties(height=400)
@@ -88,8 +92,8 @@ variability = seg_df.group_by("transport_mode").agg(
     pl.col("duration_min").min().round(1).alias("min_duration_min"),
     pl.col("duration_min").max().round(1).alias("max_duration_min"),
     pl.col("duration_min").count().alias("occurrences"),
-    pl.col("distance_m").mean().round(0).alias("avg_distance_m"),
-    pl.col("avg_speed_kmh").mean().round(1).alias("avg_speed_kmh"),
+    (pl.col("distance_m").mean() * M_TO_MI).round(2).alias("avg_distance_mi"),
+    (pl.col("avg_speed_kmh").mean() * KMH_TO_MPH).round(1).alias("avg_speed_mph"),
 )
 
 if not variability.is_empty():
@@ -150,8 +154,12 @@ if not box_data.empty:
 
 # --- Detailed Segment Table ---
 with st.expander("Raw Segment Data"):
+    raw_display = seg_df.with_columns(
+        (pl.col("distance_m") * M_TO_MI).round(2).alias("distance_mi"),
+        (pl.col("max_speed_kmh") * KMH_TO_MPH).round(1).alias("max_speed_mph"),
+    )
     st.dataframe(
-        seg_df.select(
+        raw_display.select(
             [
                 "date",
                 "direction",
@@ -159,9 +167,9 @@ with st.expander("Raw Segment Data"):
                 "segment_id",
                 "transport_mode",
                 "duration_min",
-                "distance_m",
-                "avg_speed_kmh",
-                "max_speed_kmh",
+                "distance_mi",
+                "avg_speed_mph",
+                "max_speed_mph",
             ]
         )
         .sort("date", "commute_id", "segment_id")

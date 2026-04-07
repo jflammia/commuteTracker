@@ -5,6 +5,7 @@ import polars as pl
 
 from src.dashboard.api_client import list_dates, get_daily_summary, get_segments
 from src.dashboard.tz import get_display_tz
+from src.dashboard.units import add_imperial_speed, add_imperial_distance
 
 display_tz = get_display_tz()
 
@@ -135,6 +136,11 @@ if has_commutes:
                     display_segs = display_segs.with_columns(
                         pl.col(col).dt.convert_time_zone(display_tz).alias(col)
                     )
+            display_segs = add_imperial_speed(display_segs, "avg_speed_kmh", "avg_speed_mph")
+            display_segs = add_imperial_speed(display_segs, "max_speed_kmh", "max_speed_mph")
+            display_segs = add_imperial_distance(display_segs)
+            drop_cols = {"avg_speed_kmh", "max_speed_kmh", "distance_m"} & set(display_segs.columns)
+            display_segs = display_segs.drop(list(drop_cols))
             st.dataframe(
                 display_segs.to_pandas(),
                 use_container_width=True,
@@ -150,12 +156,13 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
     day_df = day_df.with_columns(
         pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
     )
+    day_df = add_imperial_speed(day_df)
 
-    chart_df = day_df.select(["display_time", "speed_kmh"]).to_pandas()
+    chart_df = day_df.select(["display_time", "speed_mph"]).to_pandas()
 
     if has_commutes:
         chart_df_full = day_df.select(
-            ["display_time", "speed_kmh", "transport_mode", "commute_id"]
+            ["display_time", "speed_mph", "transport_mode", "commute_id"]
         ).to_pandas()
         chart_df_full["in_commute"] = chart_df_full["commute_id"].notna()
 
@@ -164,7 +171,7 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
             .mark_line(strokeWidth=1.5)
             .encode(
                 x=alt.X("display_time:T", title="Time"),
-                y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
+                y=alt.Y("speed_mph:Q", title="Speed (mph)"),
                 color=alt.Color(
                     "transport_mode:N",
                     scale=alt.Scale(
@@ -187,7 +194,7 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
             .mark_line()
             .encode(
                 x=alt.X("display_time:T", title="Time"),
-                y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
+                y=alt.Y("speed_mph:Q", title="Speed (mph)"),
             )
             .properties(height=300)
         )

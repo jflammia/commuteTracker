@@ -28,6 +28,7 @@ from src.dashboard.api_client import (
 )
 
 from src.dashboard.tz import get_display_tz
+from src.dashboard.units import add_imperial_speed, format_distance, format_speed
 
 display_tz = get_display_tz()
 
@@ -178,10 +179,11 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
     points = points.with_columns(
         pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
     )
+    points = add_imperial_speed(points)
     chart_data = points.select(
         [
             "display_time",
-            "speed_kmh",
+            "speed_mph",
             "transport_mode",
             "segment_id",
         ]
@@ -231,7 +233,7 @@ if "speed_kmh" in points.columns and "timestamp" in points.columns:
         .mark_line(strokeWidth=1.5)
         .encode(
             x=alt.X("display_time:T", title="Time"),
-            y=alt.Y("speed_kmh:Q", title="Speed (km/h)"),
+            y=alt.Y("speed_mph:Q", title="Speed (mph)"),
         )
     )
 
@@ -282,8 +284,8 @@ for row_idx in range(len(segments)):
 
     with col_info:
         duration_str = f"{seg['duration_min']} min" if seg["duration_min"] else "< 1 min"
-        distance_str = f"{seg['distance_m']:.0f} m" if seg["distance_m"] else "0 m"
-        speed_str = f"{seg['avg_speed_kmh']} km/h" if seg["avg_speed_kmh"] else "-"
+        distance_str = format_distance(seg["distance_m"])
+        speed_str = format_speed(seg["avg_speed_kmh"])
 
         color = MODE_COLORS.get(current_mode, "#7f8c8d")
         st.markdown(

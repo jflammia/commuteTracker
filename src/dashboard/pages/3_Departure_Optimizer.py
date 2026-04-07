@@ -6,6 +6,7 @@ import altair as alt
 
 from src.dashboard.api_client import get_commutes
 from src.dashboard.tz import get_display_tz
+from src.dashboard.units import M_TO_MI
 
 display_tz = get_display_tz()
 
@@ -195,7 +196,10 @@ if not hourly.is_empty() and len(hourly) >= 2:
 # --- Commute History Table ---
 with st.expander("All Commutes"):
     display_df = (
-        commutes.select(
+        commutes.with_columns(
+            (pl.col("total_distance_m") * M_TO_MI).round(2).alias("total_distance_mi"),
+        )
+        .select(
             [
                 "date",
                 "day_name",
@@ -203,7 +207,7 @@ with st.expander("All Commutes"):
                 "departure_hour",
                 "departure_minute",
                 "duration_min",
-                "total_distance_m",
+                "total_distance_mi",
                 "point_count",
             ]
         )

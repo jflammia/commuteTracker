@@ -6,6 +6,7 @@ import altair as alt
 
 from src.dashboard.api_client import get_commutes, get_all_segments, get_stats
 from src.dashboard.tz import get_display_tz
+from src.dashboard.units import M_TO_MI
 
 display_tz = get_display_tz()
 
@@ -85,7 +86,7 @@ weekly = (
         pl.col("duration_min").min().round(1).alias("min_duration_min"),
         pl.col("duration_min").max().round(1).alias("max_duration_min"),
         pl.col("commute_id").count().alias("num_commutes"),
-        pl.col("total_distance_m").mean().round(0).alias("avg_distance_m"),
+        (pl.col("total_distance_m").mean() * M_TO_MI).round(2).alias("avg_distance_mi"),
     )
     .sort("week_start")
 )
