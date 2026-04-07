@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.8](https://github.com/jflammia/commuteTracker/compare/v0.0.7...v0.0.8) (2026-04-07)
+
+
+### Bug Fixes
+
+* **dashboard:** scan all rows for schema inference in API client ([a734ebc](https://github.com/jflammia/commuteTracker/commit/a734ebce034bad128ec601095aae2e2d0ba8e3ef))
+
 ## [0.0.7](https://github.com/jflammia/commuteTracker/compare/v0.0.6...v0.0.7) (2026-04-07)
 
 
