@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.7](https://github.com/jflammia/commuteTracker/compare/v0.0.6...v0.0.7) (2026-04-07)
+
+
+### Features
+
+* **dashboard:** add healthcheck for Streamlit container ([#14](https://github.com/jflammia/commuteTracker/issues/14)) ([af1e09f](https://github.com/jflammia/commuteTracker/commit/af1e09fe151d89640e95a6fdd115695c9507c70a))
+
+
+### Bug Fixes
+
+* **dashboard:** display all timestamps in browser timezone (EDT) ([809e701](https://github.com/jflammia/commuteTracker/commit/809e701f973ad56707bccfa362f0776cb7653b6b))
+
 ## [0.0.6](https://github.com/jflammia/commuteTracker/compare/v0.0.5...v0.0.6) (2026-03-28)
 
 
