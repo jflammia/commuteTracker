@@ -5,7 +5,7 @@ import polars as pl
 
 from src.dashboard.api_client import list_dates, get_daily_summary, get_segments
 from src.dashboard.tz import get_display_tz
-from src.dashboard.units import add_imperial_speed, add_imperial_distance
+from src.dashboard.units import KMH_TO_MPH, add_imperial_speed, add_imperial_distance
 
 display_tz = get_display_tz()
 
@@ -155,8 +155,8 @@ if "speed_kmh" in day_df.columns and "timestamp" in day_df.columns:
 
     day_df = day_df.with_columns(
         pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
+        (pl.col("speed_kmh").cast(pl.Float64) * KMH_TO_MPH).round(1).alias("speed_mph"),
     )
-    day_df = add_imperial_speed(day_df)
 
     chart_df = day_df.select(["display_time", "speed_mph"]).to_pandas()
 

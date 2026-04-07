@@ -17,7 +17,7 @@ def add_imperial_speed(
 ) -> pl.DataFrame:
     """Add a speed column converted from km/h to mph."""
     if src in df.columns:
-        df = df.with_columns((pl.col(src) * KMH_TO_MPH).round(1).alias(dst))
+        df = df.with_columns((pl.col(src).cast(pl.Float64) * KMH_TO_MPH).round(1).alias(dst))
     return df
 
 
@@ -26,7 +26,7 @@ def add_imperial_distance(
 ) -> pl.DataFrame:
     """Add a distance column converted from meters to miles."""
     if src in df.columns:
-        df = df.with_columns((pl.col(src) * M_TO_MI).round(2).alias(dst))
+        df = df.with_columns((pl.col(src).cast(pl.Float64) * M_TO_MI).round(2).alias(dst))
     return df
 
 

@@ -28,7 +28,7 @@ from src.dashboard.api_client import (
 )
 
 from src.dashboard.tz import get_display_tz
-from src.dashboard.units import add_imperial_speed, format_distance, format_speed
+from src.dashboard.units import KMH_TO_MPH, format_distance, format_speed
 
 display_tz = get_display_tz()
 
@@ -178,8 +178,8 @@ st.subheader("Speed Timeline")
 if "speed_kmh" in points.columns and "timestamp" in points.columns:
     points = points.with_columns(
         pl.col("timestamp").dt.convert_time_zone(display_tz).alias("display_time"),
+        (pl.col("speed_kmh").cast(pl.Float64) * KMH_TO_MPH).round(1).alias("speed_mph"),
     )
-    points = add_imperial_speed(points)
     chart_data = points.select(
         [
             "display_time",
