@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.10](https://github.com/jflammia/commuteTracker/compare/v0.0.9...v0.0.10) (2026-04-07)
+
+
+### Bug Fixes
+
+* **dashboard:** ensure speed conversion to mph with explicit cast ([b44f54d](https://github.com/jflammia/commuteTracker/commit/b44f54da4c8c8b6d742a26c4e75b5260ff84d91f))
+
 ## [0.0.9](https://github.com/jflammia/commuteTracker/compare/v0.0.8...v0.0.9) (2026-04-07)
 
 
