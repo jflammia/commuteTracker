@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.9](https://github.com/jflammia/commuteTracker/compare/v0.0.8...v0.0.9) (2026-04-07)
+
+
+### Features
+
+* **dashboard:** display all measurements in imperial units ([8e54107](https://github.com/jflammia/commuteTracker/commit/8e54107acfc47e318a41d281d525538945610f39))
+
 ## [0.0.8](https://github.com/jflammia/commuteTracker/compare/v0.0.7...v0.0.8) (2026-04-07)
 
 
