@@ -4,14 +4,9 @@ import streamlit as st
 import polars as pl
 
 from src.dashboard.api_client import list_dates, get_daily_summary, get_segments
+from src.dashboard.tz import get_display_tz
 
-# Detect browser timezone for display
-try:
-    display_tz = st.context.timezone
-except (AttributeError, KeyError):
-    from src.config import TIMEZONE
-
-    display_tz = TIMEZONE
+display_tz = get_display_tz()
 
 st.title("Daily Commute")
 
@@ -134,8 +129,14 @@ if has_commutes:
         st.markdown(f"**{cid}**")
         segments = get_segments(cid)
         if not segments.is_empty():
+            display_segs = segments
+            for col in ("start_time", "end_time"):
+                if col in display_segs.columns:
+                    display_segs = display_segs.with_columns(
+                        pl.col(col).dt.convert_time_zone(display_tz).alias(col)
+                    )
             st.dataframe(
-                segments.to_pandas(),
+                display_segs.to_pandas(),
                 use_container_width=True,
                 hide_index=True,
             )

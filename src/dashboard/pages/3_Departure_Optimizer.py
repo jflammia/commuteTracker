@@ -5,14 +5,9 @@ import polars as pl
 import altair as alt
 
 from src.dashboard.api_client import get_commutes
+from src.dashboard.tz import get_display_tz
 
-# Detect browser timezone for display
-try:
-    display_tz = st.context.timezone
-except (AttributeError, KeyError):
-    from src.config import TIMEZONE
-
-    display_tz = TIMEZONE
+display_tz = get_display_tz()
 
 st.title("Departure Time Optimizer")
 st.markdown(

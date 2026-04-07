@@ -5,6 +5,8 @@ Run with: streamlit run src/dashboard/app.py
 
 import streamlit as st
 
+from src.dashboard.tz import get_display_tz
+
 st.set_page_config(
     page_title="Commute Tracker",
     page_icon="🚆",
@@ -19,6 +21,9 @@ st.markdown(
 )
 
 st.sidebar.success("Select a page above.")
+
+# Show active timezone so the user can verify correct detection
+st.sidebar.caption(f"Timezone: {get_display_tz()}")
 
 # Build info from backend
 try:

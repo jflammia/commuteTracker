@@ -14,6 +14,7 @@ Covers:
 11. Container data paths resolve to writable volume (#6)
 12. Home geofence radius default 50m (#7)
 13. Timezone-aware timestamps with GPS-derived timezone (#11)
+14. Dashboard API client parses timestamps as UTC-aware for EDT display
 """
 
 import time
@@ -904,3 +905,83 @@ def test_full_pipeline_timezone_integration(db, derived_dir):
     # 5. timezone column should be present
     assert "timezone" in summary.columns
     assert "timestamp_local" in summary.columns
+
+
+# ── Fix 14: Dashboard API client UTC-aware timestamps ─────────────────────
+
+
+def test_api_client_parses_utc_aware_timestamps():
+    """_parse_utc_timestamps must produce UTC-aware columns from ISO strings.
+
+    Without this, dashboard pages calling dt.convert_time_zone(display_tz)
+    either fail or silently display UTC times instead of EDT.
+    """
+    from src.dashboard.api_client import _parse_utc_timestamps
+
+    # ISO strings WITH offset (what the API returns for UTC-aware timestamps)
+    df = pl.DataFrame(
+        {
+            "timestamp": ["2024-03-26T12:00:00+00:00", "2024-03-26T13:00:00+00:00"],
+            "start_time": ["2024-03-26T12:00:00+00:00", "2024-03-26T12:30:00+00:00"],
+            "end_time": ["2024-03-26T13:00:00+00:00", "2024-03-26T13:30:00+00:00"],
+            "other_col": ["keep_me", "and_me"],
+        }
+    )
+    result = _parse_utc_timestamps(df)
+
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")
+    assert result["start_time"].dtype == pl.Datetime("us", "UTC")
+    assert result["end_time"].dtype == pl.Datetime("us", "UTC")
+    assert result["other_col"].dtype == pl.Utf8  # non-timestamp columns untouched
+
+
+def test_api_client_parses_naive_timestamps_as_utc():
+    """_parse_utc_timestamps must handle naive ISO strings (no offset) as UTC.
+
+    Old Parquet data or DuckDB may strip timezone info, producing naive strings.
+    These must still become UTC-aware so convert_time_zone works.
+    """
+    from src.dashboard.api_client import _parse_utc_timestamps
+
+    # ISO strings WITHOUT offset (naive)
+    df = pl.DataFrame(
+        {
+            "timestamp": ["2024-03-26T12:00:00", "2024-03-26T13:00:00"],
+        }
+    )
+    result = _parse_utc_timestamps(df)
+
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")
+
+
+def test_api_client_timestamps_convert_to_edt():
+    """UTC-aware timestamps from _parse_utc_timestamps must convert to EDT correctly.
+
+    This is the end-to-end test: parse ISO string → UTC-aware → convert to EDT.
+    12:00 UTC should become 08:00 EDT (UTC-4).
+    """
+    from src.dashboard.api_client import _parse_utc_timestamps
+
+    df = pl.DataFrame({"timestamp": ["2024-03-26T12:00:00+00:00"]})
+    result = _parse_utc_timestamps(df)
+
+    # Convert to America/New_York (EDT in March = UTC-4)
+    converted = result.with_columns(
+        pl.col("timestamp").dt.convert_time_zone("America/New_York").alias("local")
+    )
+    local_hour = converted["local"].dt.hour()[0]
+    assert local_hour == 8, f"12:00 UTC should be 08:00 EDT, got {local_hour}:00"
+
+
+def test_api_client_skips_non_string_columns():
+    """_parse_utc_timestamps must skip columns that are already datetime typed."""
+    from src.dashboard.api_client import _parse_utc_timestamps
+
+    df = pl.DataFrame(
+        {
+            "timestamp": pl.Series([1711454400000000], dtype=pl.Datetime("us", "UTC")),
+        }
+    )
+    result = _parse_utc_timestamps(df)
+    # Should be unchanged — already a datetime, not Utf8
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")

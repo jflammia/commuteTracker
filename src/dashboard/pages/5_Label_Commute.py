@@ -27,13 +27,9 @@ from src.dashboard.api_client import (
     export_labels,
 )
 
-# Detect browser timezone for display
-try:
-    display_tz = st.context.timezone
-except (AttributeError, KeyError):
-    from src.config import TIMEZONE
+from src.dashboard.tz import get_display_tz
 
-    display_tz = TIMEZONE
+display_tz = get_display_tz()
 
 TRANSPORT_MODES = ["stationary", "waiting", "walking", "driving", "train"]
 MODE_COLORS = {
@@ -376,6 +372,17 @@ with col_bulk2:
         for lbl in labels:
             was_changed = lbl["original_mode"] != lbl["corrected_mode"]
             labeled_at = lbl.get("labeled_at", "")
+            if labeled_at:
+                from datetime import datetime as dt, timezone as tz
+                from zoneinfo import ZoneInfo
+
+                try:
+                    utc_dt = dt.fromisoformat(labeled_at).replace(tzinfo=tz.utc)
+                    labeled_at = utc_dt.astimezone(ZoneInfo(display_tz)).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                except (ValueError, KeyError):
+                    labeled_at = labeled_at[:19]
             summary_data.append(
                 {
                     "Segment": lbl["segment_id"],
@@ -383,7 +390,7 @@ with col_bulk2:
                     "Corrected": lbl["corrected_mode"],
                     "Changed": "yes" if was_changed else "confirmed",
                     "Notes": lbl.get("notes", ""),
-                    "Labeled": labeled_at[:19] if labeled_at else "",
+                    "Labeled": labeled_at,
                 }
             )
         st.dataframe(

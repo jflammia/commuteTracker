@@ -14,6 +14,10 @@ import os
 import httpx
 import polars as pl
 
+# Timestamp columns the API returns as ISO strings that must be parsed as UTC-aware.
+# timestamp_local is intentionally excluded — it's a naive local time for date grouping.
+_UTC_TS_COLS = ("timestamp", "start_time", "end_time")
+
 API_BASE = os.environ.get("COMMUTE_API_URL", "http://localhost:8080/api/v1")
 _TIMEOUT = 30.0
 
@@ -43,6 +47,22 @@ def _to_df(records: list[dict]) -> pl.DataFrame:
     return pl.DataFrame(records)
 
 
+def _parse_utc_timestamps(df: pl.DataFrame) -> pl.DataFrame:
+    """Parse ISO timestamp strings into UTC-aware Polars datetimes.
+
+    Handles both timezone-aware strings ("...+00:00") and naive strings
+    by always producing Datetime(us, "UTC") columns. Passing time_zone="UTC"
+    tells Polars to convert offset-bearing strings to UTC and treat naive
+    strings as already in UTC.
+    """
+    for col in _UTC_TS_COLS:
+        if col in df.columns and df[col].dtype == pl.Utf8:
+            df = df.with_columns(
+                pl.col(col).str.to_datetime(strict=False, time_zone="UTC").alias(col)
+            )
+    return df
+
+
 # ── Health & Dates ────────────────────────────────────────────────────────────
 
 
@@ -62,13 +82,7 @@ def get_commutes() -> pl.DataFrame:
     records = _get("/commutes")
     if not records:
         return pl.DataFrame()
-    df = pl.DataFrame(records)
-    # Parse datetime columns
-    if "start_time" in df.columns:
-        df = df.with_columns(pl.col("start_time").str.to_datetime(strict=False))
-    if "end_time" in df.columns:
-        df = df.with_columns(pl.col("end_time").str.to_datetime(strict=False))
-    return df
+    return _parse_utc_timestamps(pl.DataFrame(records))
 
 
 def get_commute(commute_id: str) -> dict | None:
@@ -86,12 +100,7 @@ def get_segments(commute_id: str) -> pl.DataFrame:
     records = _get(f"/commutes/{commute_id}/segments")
     if not records:
         return pl.DataFrame()
-    df = pl.DataFrame(records)
-    if "start_time" in df.columns:
-        df = df.with_columns(pl.col("start_time").str.to_datetime(strict=False))
-    if "end_time" in df.columns:
-        df = df.with_columns(pl.col("end_time").str.to_datetime(strict=False))
-    return df
+    return _parse_utc_timestamps(pl.DataFrame(records))
 
 
 def get_commute_points(commute_id: str) -> pl.DataFrame:
@@ -99,10 +108,7 @@ def get_commute_points(commute_id: str) -> pl.DataFrame:
     records = _get(f"/commutes/{commute_id}/points")
     if not records:
         return pl.DataFrame()
-    df = pl.DataFrame(records)
-    if "timestamp" in df.columns:
-        df = df.with_columns(pl.col("timestamp").str.to_datetime(strict=False))
-    return df
+    return _parse_utc_timestamps(pl.DataFrame(records))
 
 
 def get_all_segments(direction: str | None = None) -> pl.DataFrame:
@@ -110,12 +116,7 @@ def get_all_segments(direction: str | None = None) -> pl.DataFrame:
     records = _get("/segments", direction=direction)
     if not records:
         return pl.DataFrame()
-    df = pl.DataFrame(records)
-    if "start_time" in df.columns:
-        df = df.with_columns(pl.col("start_time").str.to_datetime(strict=False))
-    if "end_time" in df.columns:
-        df = df.with_columns(pl.col("end_time").str.to_datetime(strict=False))
-    return df
+    return _parse_utc_timestamps(pl.DataFrame(records))
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
@@ -137,10 +138,7 @@ def get_daily_summary(day: str) -> pl.DataFrame:
     records = _get(f"/daily/{day}")
     if not records:
         return pl.DataFrame()
-    df = pl.DataFrame(records)
-    if "timestamp" in df.columns:
-        df = df.with_columns(pl.col("timestamp").str.to_datetime(strict=False))
-    return df
+    return _parse_utc_timestamps(pl.DataFrame(records))
 
 
 # ── Raw Data ──────────────────────────────────────────────────────────────────
