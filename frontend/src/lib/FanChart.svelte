@@ -13,8 +13,8 @@
 
   onMount(() => {
     const rows = options.map((o) => o.gtfs_trip_id);
-    const p50 = options.map((o, i) => [ms(o.p50_arrive), i]);
-    const p90 = options.map((o, i) => [ms(o.p90_arrive), i]);
+    const p50 = options.map((o) => [ms(o.p50_arrive), o.gtfs_trip_id]);
+    const p90 = options.map((o) => [ms(o.p90_arrive), o.gtfs_trip_id]);
     return mountChart(el, {
       grid: { left: 90, right: 24, top: 16, bottom: 40 },
       xAxis: { type: 'time', name: 'arrival' },

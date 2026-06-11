@@ -39,7 +39,9 @@
   {#if result.options.length === 0}
     <p>No trains arrive in time for that goal.</p>
   {:else}
-    <FanChart options={result.options} />
+    {#key result}
+      <FanChart options={result.options} />
+    {/key}
     {#each result.options as opt, i (opt.gtfs_trip_id)}
       <ItineraryCard option={opt} best={i === 0} />
     {/each}
