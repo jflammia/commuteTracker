@@ -5,9 +5,11 @@ endpoints take a multipart `token` field. Tokens are daily-rate-limited, so
 the manager caches in memory AND persists to <data_dir>/njt_token.txt; it
 re-exchanges only when an endpoint reports a token problem."""
 
+import asyncio
 import base64
 import hashlib
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,29 +37,43 @@ class NjtTokenManager:
         self._token: str | None = (
             self._path.read_text().strip() if self._path.exists() else None
         ) or None
+        self._lock = asyncio.Lock()
 
     async def token(self, client: httpx.AsyncClient) -> str | None:
         if self._token:
             return self._token
-        return await self.refresh(client)
+        return await self.refresh(client, expected=None)
 
-    async def refresh(self, client: httpx.AsyncClient) -> str | None:
-        try:
-            resp = await client.post(
-                f"{self._api_base}/getToken",
-                files={"username": (None, self._username), "password": (None, self._password)},
-                timeout=30.0,
-            )
-            data = resp.json()
-            token = data.get("UserToken")
-            if token:
-                self._token = token
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-                self._path.write_text(token)
-                return token
-            log.warning("njt getToken failed: %s", data.get("errorMessage"))
-        except Exception:
-            log.exception("njt getToken request failed")
+    async def refresh(
+        self, client: httpx.AsyncClient, expected: str | None = "__unset__"
+    ) -> str | None:  # type: ignore[assignment]
+        """Exchange credentials for a fresh token, coalescing concurrent callers.
+
+        `expected` is the token the caller believed was current (None on cold
+        start; the stale token string when retrying after a token error). Under
+        the lock we re-check: if another coroutine already refreshed past
+        `expected`, return the new token instead of burning another exchange.
+        """
+        async with self._lock:
+            if expected != "__unset__" and self._token != expected and self._token:
+                return self._token  # another coroutine already refreshed
+            try:
+                resp = await client.post(
+                    f"{self._api_base}/getToken",
+                    files={"username": (None, self._username), "password": (None, self._password)},
+                    timeout=30.0,
+                )
+                data = resp.json()
+                tok = data.get("UserToken")
+                if tok:
+                    self._token = tok
+                    self._path.parent.mkdir(parents=True, exist_ok=True)
+                    self._path.write_text(tok)
+                    os.chmod(self._path, 0o600)
+                    return tok
+                log.warning("njt getToken failed: %s", data.get("errorMessage"))
+            except Exception:
+                log.exception("njt getToken request failed")
         return None
 
 
@@ -104,7 +120,7 @@ async def fetch_njt_once(
             return False
         resp = await client.post(url, files={"token": (None, token)}, timeout=60.0)
         if _is_token_error(resp):
-            token = await manager.refresh(client)
+            token = await manager.refresh(client, expected=token)
             if token is not None:
                 resp = await client.post(url, files={"token": (None, token)}, timeout=60.0)
         digest = hashlib.sha256(resp.content).hexdigest()

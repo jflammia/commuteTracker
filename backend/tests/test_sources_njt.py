@@ -85,6 +85,35 @@ async def test_unprovisioned_account_archives_error(tmp_path):
     assert "token" in rec["payload"]["error"]
 
 
+@pytest.mark.anyio
+async def test_concurrent_cold_start_coalesces_to_one_exchange(tmp_path):
+    import asyncio as _asyncio
+
+    state = {}
+
+    async def slow_handler(request):
+        if str(request.url).endswith("/getToken"):
+            state["token_calls"] = state.get("token_calls", 0) + 1
+            await _asyncio.sleep(0.05)  # widen the race window
+            return httpx.Response(200, json={"UserToken": f"tok{state['token_calls']}"})
+        current = f"tok{state.get('token_calls', 0)}"
+        if current not in request.content.decode(errors="replace"):
+            return httpx.Response(500, json={"errorMessage": "Invalid token."})
+        return httpx.Response(200, content=b"ok")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(slow_handler))
+    mgr = NjtTokenManager(API, "gooduser", "pw", tmp_path)
+    specs = [
+        NjtSpec(name="gtfs_njt", endpoint="getGTFS", interval_s=86400.0),
+        NjtSpec(name="rt_njt_trips", endpoint="getTripUpdates", interval_s=60.0),
+        NjtSpec(name="rt_njt_alerts", endpoint="getAlerts", interval_s=60.0),
+    ]
+    store = RawStore(tmp_path)
+    results = await _asyncio.gather(*(fetch_njt_once(client, mgr, s, store, {}) for s in specs))
+    assert all(results)  # all three fetched ok
+    assert state["token_calls"] == 1  # exactly ONE getToken despite 3 concurrent cold-start callers
+
+
 def test_specs_gated_on_credentials(tmp_path):
     import dataclasses
 
