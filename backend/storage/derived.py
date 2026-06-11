@@ -259,7 +259,24 @@ class DerivedStore:
                 [trip_id],
             ).fetchall()
         ]
-        return {"trip": self._trip_row_to_dict(row), "segments": segments, "points": points}
+        match_by_seg = {m["seg_index"]: m for m in self.matches_for_trip(trip_id)}
+        itinerary = [
+            {
+                "mode": s["mode"],
+                "start_ts": s["start_ts"],
+                "end_ts": s["end_ts"],
+                "duration_s": s["duration_s"],
+                "distance_m": s["distance_m"],
+                "train": match_by_seg.get(s["seg_index"]),
+            }
+            for s in segments
+        ]
+        return {
+            "trip": self._trip_row_to_dict(row),
+            "segments": segments,
+            "points": points,
+            "itinerary": itinerary,
+        }
 
     @staticmethod
     def _trip_row_to_dict(r) -> dict:
