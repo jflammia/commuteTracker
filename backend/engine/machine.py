@@ -11,7 +11,8 @@ from backend.engine.geo import haversine_m
 from backend.engine.geofence import Geofence, resolve_geofence
 from backend.engine.hygiene import check
 from backend.engine.params import EngineParams
-from backend.engine.types import EnrichedPoint, Point, PointRejected, TripClosed
+from backend.engine.segmenter import segment_trip
+from backend.engine.types import EnrichedPoint, Point, PointRejected, Trip, TripClosed
 
 
 @dataclass
@@ -88,10 +89,53 @@ class TripEngine:
         return haversine_m(first.lat, first.lon, last.lat, last.lon) >= (p.move_min_displacement_m)
 
     def _maybe_close_on_dwell(self) -> list[TripClosed]:
-        return []  # implemented in the trip-close task
+        s, p = self.state, self.params
+        pts = s.trip_points
+        last = pts[-1]
+        # find the latest point at or before the start of the dwell window
+        anchor_idx = None
+        for i in range(len(pts) - 1, -1, -1):
+            if last.ts - pts[i].ts >= p.dwell_close_s:
+                anchor_idx = i
+                break
+        if anchor_idx is None:
+            return []
+        anchor = pts[anchor_idx]
+        for pt in pts[anchor_idx:]:
+            if haversine_m(anchor.lat, anchor.lon, pt.lat, pt.lon) > p.dwell_radius_m:
+                return []
+        return self._close_trip(end_index=anchor_idx + 1)
 
     def _close_trip(self, end_index: int) -> list[TripClosed]:
+        kept = self.state.trip_points[:end_index]
         self.state.status = "idle"
         self.state.recent = []
         self.state.trip_points = []
-        return []  # full assembly implemented in the trip-close task
+        if len(kept) < 2:
+            return []
+        duration = kept[-1].ts - kept[0].ts
+        distance = sum(pt.distance_m for pt in kept[1:])
+        p = self.params
+        if duration < p.min_trip_duration_s or distance < p.min_trip_distance_m:
+            return []
+        trip_id = f"t{int(kept[0].ts)}"
+        start_gf, end_gf = kept[0].geofence, kept[-1].geofence
+        if start_gf == "home" and end_gf == "work":
+            direction = "outbound"
+        elif start_gf == "work" and end_gf == "home":
+            direction = "inbound"
+        else:
+            direction = "other"
+        trip = Trip(
+            trip_id=trip_id,
+            start_ts=kept[0].ts,
+            end_ts=kept[-1].ts,
+            duration_s=duration,
+            distance_m=distance,
+            point_count=len(kept),
+            start_geofence=start_gf,
+            end_geofence=end_gf,
+            direction=direction,
+        )
+        segments = segment_trip(trip_id, kept, p)
+        return [TripClosed(trip=trip, segments=segments, points=kept)]
