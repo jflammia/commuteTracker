@@ -1,4 +1,4 @@
-"""Daily archival: closed raw JSONL day-files → Parquet (→ S3, Task 7).
+"""Daily archival: closed raw JSONL day-files → Parquet (→ S3).
 
 Local raw files are deleted only after the Parquet copy is verified.
 Payload is stored as a verbatim JSON string — schema-stable forever.

@@ -42,7 +42,7 @@ class Passthrough:
         task.add_done_callback(self._inflight.discard)
 
     async def aclose(self) -> None:
-        # Wired into the app lifespan in Task 9 of the phase-1 plan.
+        # Wired into the app lifespan (backend/app.py).
         if self._inflight:
             await asyncio.gather(*self._inflight, return_exceptions=True)
         if self._client is not None:

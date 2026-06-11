@@ -58,6 +58,7 @@ services:
     ports:
       - "8090:8090"
     environment:
+      # S3 archive upload disabled by default — set CT_S3_BUCKET (+ AWS creds) to enable
       CT_DATA_DIR: /data
       CT_PASSTHROUGH_URL: http://receiver:8080/pub
     volumes:

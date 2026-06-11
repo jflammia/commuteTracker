@@ -259,6 +259,50 @@ Six-page Streamlit dashboard at port `8501`:
 - S3 sync runs every 5 minutes with automatic retry
 - All derived data can be rebuilt from raw at any time
 
+## Rewrite backend (phase 1)
+
+A new ingestion and archive service (`backend/`) is being built alongside the existing stack. It runs independently on port `8090`, stores data in `data_v2/`, and forwards every payload to the legacy receiver so the existing dashboard stays fed during the migration.
+
+### Run locally
+
+```bash
+uvicorn backend.app:app --port 8090
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/ingest/owntracks` | OwnTracks front door — always returns 200 |
+| `GET` | `/api/health/ingestion` | Health and backlog status |
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CT_DATA_DIR` | `data_v2` | Root directory for raw JSONL and archive Parquet |
+| `CT_S3_BUCKET` | — | S3 bucket for archive upload (optional) |
+| `CT_S3_PREFIX` | — | Key prefix within the bucket |
+| `CT_S3_REGION` | — | AWS region for the bucket |
+| `CT_PASSTHROUGH_URL` | — | Forward ingested payloads to the legacy receiver |
+| `CT_ARCHIVE_HOUR_UTC` | `6` | Hour (UTC) at which the daily archive job runs |
+
+### Docker
+
+```bash
+docker compose up backend
+```
+
+Deploys alongside the legacy receiver and dashboard. The `CT_PASSTHROUGH_URL` is pre-configured to forward to the legacy receiver. S3 archive upload is disabled by default — add `CT_S3_BUCKET` (and AWS credentials) to the environment block to enable it.
+
+### Migration
+
+To import historical data from the legacy SQLite database:
+
+```bash
+python -m scripts.migrate_legacy_raw data/commute_tracker.db data_v2
+```
+
 ## Development
 
 ```bash
