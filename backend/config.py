@@ -14,6 +14,10 @@ class Settings:
     passthrough_url: str | None
     archive_hour_utc: int
 
+    def __post_init__(self) -> None:
+        if not 0 <= self.archive_hour_utc <= 23:
+            raise ValueError(f"CT_ARCHIVE_HOUR_UTC={self.archive_hour_utc} must be in 0..23")
+
 
 def load_settings() -> Settings:
     return Settings(

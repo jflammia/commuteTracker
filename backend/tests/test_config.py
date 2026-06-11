@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from backend.config import Settings, load_settings
 
 
@@ -20,6 +22,12 @@ def test_defaults(monkeypatch):
     assert s.s3_region is None
     assert s.passthrough_url is None
     assert s.archive_hour_utc == 6
+
+
+def test_archive_hour_out_of_range_fails_fast(monkeypatch):
+    monkeypatch.setenv("CT_ARCHIVE_HOUR_UTC", "25")
+    with pytest.raises(ValueError, match="0..23"):
+        load_settings()
 
 
 def test_env_overrides(monkeypatch):

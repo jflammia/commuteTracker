@@ -21,6 +21,6 @@ async def run_daily(fn: Callable[[], object], *, hour_utc: int) -> None:
         wait = (next_run_at(now, hour_utc=hour_utc) - now).total_seconds()
         await asyncio.sleep(wait)
         try:
-            fn()
+            await asyncio.to_thread(fn)
         except Exception:
             log.exception("daily job failed; will retry tomorrow")
