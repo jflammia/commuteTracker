@@ -65,6 +65,15 @@ CREATE TABLE IF NOT EXISTS label_overrides (
     trip_id VARCHAR, seg_index INTEGER, kind VARCHAR, value VARCHAR,
     labeled_at VARCHAR
 );
+CREATE TABLE IF NOT EXISTS leg_observations (
+    trip_id VARCHAR, direction VARCHAR, leg_index INTEGER, kind VARCHAR,
+    duration_s DOUBLE, distance_m DOUBLE, gtfs_trip_id VARCHAR, source VARCHAR,
+    route_name VARCHAR, scheduled_dep_s INTEGER, delta_s DOUBLE,
+    board_stop VARCHAR, alight_stop VARCHAR
+);
+CREATE TABLE IF NOT EXISTS recommendations (
+    service_date VARCHAR, direction VARCHAR, payload VARCHAR
+);
 """
 
 
@@ -83,7 +92,7 @@ class DerivedStore:
         t = ev.trip
         self._con.execute("BEGIN")
         try:
-            for table in ("trips", "segments", "trip_points", "train_matches"):
+            for table in ("trips", "segments", "trip_points", "train_matches", "leg_observations"):
                 self._con.execute(f"DELETE FROM {table} WHERE trip_id = ?", [t.trip_id])
             self._con.execute(
                 "INSERT INTO trips VALUES (?,?,?,?,?,?,?,?,?)",
@@ -250,6 +259,8 @@ class DerivedStore:
             "gtfs_calendar_dates",
             "train_matches",
             "label_overrides",
+            "leg_observations",
+            "recommendations",
         ):
             self._con.execute(f"DELETE FROM {table}")
 
@@ -366,6 +377,68 @@ class DerivedStore:
             "end_geofence": r[7],
             "direction": r[8],
         }
+
+    def write_leg_observations(self, trip_id: str, legs: list) -> None:
+        self._con.execute("DELETE FROM leg_observations WHERE trip_id = ?", [trip_id])
+        if not legs:
+            return
+        self._con.executemany(
+            "INSERT INTO leg_observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                [
+                    lg.trip_id,
+                    lg.direction,
+                    lg.leg_index,
+                    lg.kind,
+                    lg.duration_s,
+                    lg.distance_m,
+                    lg.gtfs_trip_id,
+                    lg.source,
+                    lg.route_name,
+                    lg.scheduled_dep_s,
+                    lg.delta_s,
+                    lg.board_stop,
+                    lg.alight_stop,
+                ]
+                for lg in legs
+            ],
+        )
+
+    def leg_observations(self) -> list[dict]:
+        cols = [
+            "trip_id",
+            "direction",
+            "leg_index",
+            "kind",
+            "duration_s",
+            "distance_m",
+            "gtfs_trip_id",
+            "source",
+            "route_name",
+            "scheduled_dep_s",
+            "delta_s",
+            "board_stop",
+            "alight_stop",
+        ]
+        rows = self._con.execute(f"SELECT {', '.join(cols)} FROM leg_observations").fetchall()
+        return [dict(zip(cols, r)) for r in rows]
+
+    def write_recommendation(self, service_date: str, direction: str, payload: dict) -> None:
+        self._con.execute(
+            "DELETE FROM recommendations WHERE service_date = ? AND direction = ?",
+            [service_date, direction],
+        )
+        self._con.execute(
+            "INSERT INTO recommendations VALUES (?,?,?)",
+            [service_date, direction, json.dumps(payload)],
+        )
+
+    def recommendation(self, service_date: str, direction: str) -> dict | None:
+        row = self._con.execute(
+            "SELECT payload FROM recommendations WHERE service_date = ? AND direction = ?",
+            [service_date, direction],
+        ).fetchone()
+        return json.loads(row[0]) if row else None
 
     def close(self) -> None:
         self._con.close()
