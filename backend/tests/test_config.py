@@ -26,6 +26,12 @@ def test_defaults(monkeypatch):
         "CT_NJT_API_BASE",
         "CT_SOURCE_POLL_INTERVAL_S",
         "CT_GTFS_REFRESH_INTERVAL_S",
+        "CT_COMMUTE_SOURCE",
+        "CT_BOARD_STOP_ID",
+        "CT_ALIGHT_STOP_ID",
+        "CT_ARRIVE_BY_LOCAL",
+        "CT_ACCESS_DISTANCE_M",
+        "CT_EGRESS_DISTANCE_M",
     ):
         monkeypatch.delenv(var, raising=False)
     s = load_settings()
@@ -43,6 +49,7 @@ def test_defaults(monkeypatch):
     assert s.work_radius_m == 150.0
     assert s.path_gtfs_url is None
     assert s.source_poll_interval_s == 60.0
+    assert s.commute_source is None
 
 
 def test_archive_hour_out_of_range_fails_fast(monkeypatch):
@@ -116,3 +123,19 @@ def test_geofence_env_vars(monkeypatch):
     assert s.work_lat == 40.75
     assert s.work_lon == -73.99
     assert s.work_radius_m == 120.0
+
+
+def test_optimizer_env_vars(monkeypatch):
+    monkeypatch.setenv("CT_COMMUTE_SOURCE", "gtfs_njt")
+    monkeypatch.setenv("CT_BOARD_STOP_ID", "MP")
+    monkeypatch.setenv("CT_ALIGHT_STOP_ID", "NYP")
+    monkeypatch.setenv("CT_ARRIVE_BY_LOCAL", "09:00")
+    monkeypatch.setenv("CT_ACCESS_DISTANCE_M", "500")
+    monkeypatch.setenv("CT_EGRESS_DISTANCE_M", "650")
+    s = load_settings()
+    assert s.commute_source == "gtfs_njt"
+    assert s.board_stop_id == "MP"
+    assert s.alight_stop_id == "NYP"
+    assert s.arrive_by_local == "09:00"
+    assert s.access_distance_m == 500.0
+    assert s.egress_distance_m == 650.0
