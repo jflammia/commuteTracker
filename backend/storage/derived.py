@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS gtfs_calendar (
 CREATE TABLE IF NOT EXISTS gtfs_calendar_dates (
     source VARCHAR, service_id VARCHAR, date VARCHAR, exception_type INTEGER
 );
+CREATE TABLE IF NOT EXISTS train_matches (
+    trip_id VARCHAR, seg_index INTEGER, source VARCHAR, gtfs_trip_id VARCHAR,
+    route_name VARCHAR, headsign VARCHAR, board_stop VARCHAR, alight_stop VARCHAR,
+    scheduled_dep_s INTEGER, delta_s DOUBLE
+);
 """
 
 
@@ -73,7 +78,7 @@ class DerivedStore:
         t = ev.trip
         self._con.execute("BEGIN")
         try:
-            for table in ("trips", "segments", "trip_points"):
+            for table in ("trips", "segments", "trip_points", "train_matches"):
                 self._con.execute(f"DELETE FROM {table} WHERE trip_id = ?", [t.trip_id])
             self._con.execute(
                 "INSERT INTO trips VALUES (?,?,?,?,?,?,?,?,?)",
@@ -135,6 +140,50 @@ class DerivedStore:
             [ev.point.ts, ev.point.lat, ev.point.lon, ev.reason],
         )
 
+    def write_train_matches(self, matches: list) -> None:
+        if not matches:
+            return
+        self._con.executemany(
+            "INSERT INTO train_matches VALUES (?,?,?,?,?,?,?,?,?,?)",
+            [
+                [
+                    m.trip_id,
+                    m.seg_index,
+                    m.source,
+                    m.gtfs_trip_id,
+                    m.route_name,
+                    m.headsign,
+                    m.board_stop,
+                    m.alight_stop,
+                    m.scheduled_dep_s,
+                    m.delta_s,
+                ]
+                for m in matches
+            ],
+        )
+
+    def matches_for_trip(self, trip_id: str) -> list[dict]:
+        rows = self._con.execute(
+            "SELECT seg_index, source, gtfs_trip_id, route_name, headsign, "
+            "board_stop, alight_stop, scheduled_dep_s, delta_s "
+            "FROM train_matches WHERE trip_id = ? ORDER BY seg_index",
+            [trip_id],
+        ).fetchall()
+        return [
+            {
+                "seg_index": r[0],
+                "source": r[1],
+                "gtfs_trip_id": r[2],
+                "route_name": r[3],
+                "headsign": r[4],
+                "board_stop": r[5],
+                "alight_stop": r[6],
+                "scheduled_dep_s": r[7],
+                "delta_s": r[8],
+            }
+            for r in rows
+        ]
+
     def rejected_count(self) -> int:
         return self._con.execute("SELECT count(*) FROM rejected_points").fetchone()[0]
 
@@ -156,6 +205,7 @@ class DerivedStore:
             "gtfs_stop_times",
             "gtfs_calendar",
             "gtfs_calendar_dates",
+            "train_matches",
         ):
             self._con.execute(f"DELETE FROM {table}")
 

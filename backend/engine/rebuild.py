@@ -8,6 +8,7 @@ CLI: python -m backend.engine.rebuild
 import json
 import logging
 from collections import Counter
+from datetime import UTC, datetime
 
 from backend.config import Settings, load_settings
 from backend.engine.geofence import geofences_from_settings
@@ -16,6 +17,8 @@ from backend.engine.params import EngineParams
 from backend.engine.types import Point, TripClosed
 from backend.storage.derived import DerivedStore
 from backend.storage.query import EventQuery
+from backend.transit.gtfs import latest_snapshot, parse_gtfs
+from backend.transit.matcher import match_trip
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +28,10 @@ def rebuild(
 ) -> tuple[TripEngine, DerivedStore, dict]:
     store = DerivedStore(settings)
     store.truncate()
+    for source in ("gtfs_path", "gtfs_njt"):
+        snapshot = latest_snapshot(settings, source)
+        if snapshot is not None:
+            parse_gtfs(store.con, source, snapshot, fetched_at=datetime.now(UTC).isoformat())
     engine = TripEngine(params or EngineParams(), geofences_from_settings(settings))
     q = EventQuery(settings)
     rel = q.events("owntracks")
@@ -42,6 +49,9 @@ def rebuild(
             if isinstance(ev, TripClosed):
                 store.write_trip_closed(ev)
                 counts["trips"] += 1
+                train_matches = match_trip(store.con, ev)
+                store.write_train_matches(train_matches)
+                counts["train_matches"] += len(train_matches)
             else:
                 store.write_rejected(ev)
                 counts["rejected"] += 1
