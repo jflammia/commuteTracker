@@ -26,7 +26,6 @@ def test_compose_produces_arrival_quantiles():
         access=_fixed(360.0),
         ride=_fixed(2220.0),
         egress=_fixed(480.0),
-        service_date_midnight_local_s=0,
         params=P,
     )
     # leave_by = dep - access; arrival ≈ dep + ride + egress
@@ -43,7 +42,6 @@ def test_compose_widens_with_uncertain_legs():
         access=_fixed(360.0),
         ride=_fixed(2220.0),
         egress=_fixed(480.0),
-        service_date_midnight_local_s=0,
         params=P,
     )
     wide_ride = EmpiricalDistribution(
@@ -57,7 +55,6 @@ def test_compose_widens_with_uncertain_legs():
         access=_fixed(360.0),
         ride=wide_ride,
         egress=_fixed(480.0),
-        service_date_midnight_local_s=0,
         params=P,
     )
     assert (wide["p90_arr_s"] - wide["p50_arr_s"]) > (tight["p90_arr_s"] - tight["p50_arr_s"])
@@ -69,7 +66,6 @@ def test_compose_is_deterministic():
         access=_fixed(360.0),
         ride=_fixed(2220.0),
         egress=_fixed(480.0),
-        service_date_midnight_local_s=0,
         params=P,
     )
     b = compose_itinerary(
@@ -77,7 +73,6 @@ def test_compose_is_deterministic():
         access=_fixed(360.0),
         ride=_fixed(2220.0),
         egress=_fixed(480.0),
-        service_date_midnight_local_s=0,
         params=P,
     )
     assert a == b

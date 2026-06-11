@@ -1,8 +1,7 @@
 """Rank candidate itineraries for an arrival goal and shape the API payload.
 
 Reuses the leg models built from history + the GTFS itinerary enumerator. The
-ranking is: feasible (p90 arrival within goal + ride spread) trains, latest
-departure first (catch the latest train you safely can)."""
+ranking is: feasible (scheduled arrival + median egress ≤ goal), latest departure first."""
 
 from backend.optimizer.compose import compose_itinerary
 from backend.optimizer.itinerary import candidate_itineraries
@@ -48,7 +47,6 @@ def recommend(
             access=access,
             ride=ride,
             egress=egress,
-            service_date_midnight_local_s=0,
             params=params,
         )
         options.append(

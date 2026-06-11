@@ -11,4 +11,4 @@ class OptimizerParams:
     ride_delay_spread_s: float = 180.0  # prior spread on rail arrival when few rides seen
     mc_iters: int = 2000  # Monte Carlo samples per itinerary
     mc_seed: int = 20260611  # fixed seed → reproducible recommendations
-    min_transfer_s: float = 120.0  # minimum feasible transfer connection time
+    min_transfer_s: float = 120.0  # reserved for Phase 6 transfer enumeration

@@ -34,7 +34,6 @@ def compose_itinerary(
     access: EmpiricalDistribution,
     ride: EmpiricalDistribution,
     egress: EmpiricalDistribution,
-    service_date_midnight_local_s: int,
     params: OptimizerParams,
 ) -> dict:
     rng = random.Random(params.mc_seed)
