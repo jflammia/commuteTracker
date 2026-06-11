@@ -87,6 +87,12 @@ Repoint OwnTracks at the new backend's host:port (path stays `/pub` — the alia
 handles it). The backend appends every point durably (always-200) and forwards
 to legacy via passthrough, so nothing is lost during validation.
 
+> During this phase the legacy receiver *also* records the forwarded points
+> (it owns `/pub`), so the same points exist in both systems. That is fine —
+> the new backend's raw archive is append-only and the migration (Step 2) keys
+> on the OwnTracks `tst`, so re-ingested history de-duplicates by day-file. Once
+> you drop the passthrough (Step 3) only the new backend records.
+
 Verify: `GET /api/health/ingestion` shows fresh `last_event_at`; the SvelteKit
 UI loads at `/`; `GET /api/health/sources` shows PATH feeds archiving.
 
