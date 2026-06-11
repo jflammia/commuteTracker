@@ -111,6 +111,22 @@ def test_parse_gtfs_tolerates_malformed_route_type(settings):
     assert counts["routes"] == 1  # bad row skipped, good row kept
 
 
+def test_latest_snapshot_survives_archival(settings):
+    from backend.storage.archive import Archiver
+
+    _archive_snapshot(settings)  # writes to 2026-06-09 raw day file
+    results = Archiver(settings).run(today="2026-06-10")
+    assert all(r.ok for r in results)
+    raw_file = settings.data_dir / "raw" / "gtfs_path" / "2026-06-09.jsonl"
+    assert not raw_file.exists()  # raw deleted — snapshot now ONLY in parquet
+    data = latest_snapshot(settings, "gtfs_path")
+    assert data is not None and data[:2] == b"PK"
+    # and it still parses
+    store = DerivedStore(settings)
+    counts = parse_gtfs(store.con, "gtfs_path", data, fetched_at="x")
+    assert counts["stops"] == 2
+
+
 def test_parse_gtfs_skips_untimed_stop_time_rows(settings):
     import io
     import zipfile

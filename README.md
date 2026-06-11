@@ -294,6 +294,7 @@ uvicorn backend.app:app --port 8090
 ### External data sources
 
 Transit schedule and real-time data are fetched by a background poller. Each source is enabled by configuring its URL; leaving it unset disables that source entirely. Every fetch is archived verbatim before parsing — data is re-parseable forever and no fetch is silently discarded.
+A GTFS snapshot fetched while the app is running is archived immediately but only re-parsed into the schedule tables at the next startup rebuild.
 
 #### Environment variables
 

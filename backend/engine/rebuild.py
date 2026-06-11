@@ -49,6 +49,8 @@ def rebuild(
             if isinstance(ev, TripClosed):
                 store.write_trip_closed(ev)
                 counts["trips"] += 1
+                # Unlike the live path, matcher errors here propagate: rebuild inputs
+                # are fully controlled derived data, so a crash means a real bug.
                 train_matches = match_trip(store.con, ev)
                 store.write_train_matches(train_matches)
                 counts["train_matches"] += len(train_matches)
