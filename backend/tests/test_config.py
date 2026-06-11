@@ -13,6 +13,12 @@ def test_defaults(monkeypatch):
         "CT_S3_REGION",
         "CT_PASSTHROUGH_URL",
         "CT_ARCHIVE_HOUR_UTC",
+        "CT_HOME_LAT",
+        "CT_HOME_LON",
+        "CT_HOME_RADIUS_M",
+        "CT_WORK_LAT",
+        "CT_WORK_LON",
+        "CT_WORK_RADIUS_M",
     ):
         monkeypatch.delenv(var, raising=False)
     s = load_settings()
@@ -22,6 +28,12 @@ def test_defaults(monkeypatch):
     assert s.s3_region is None
     assert s.passthrough_url is None
     assert s.archive_hour_utc == 6
+    assert s.home_lat == 0.0
+    assert s.home_lon == 0.0
+    assert s.home_radius_m == 50.0
+    assert s.work_lat == 0.0
+    assert s.work_lon == 0.0
+    assert s.work_radius_m == 150.0
 
 
 def test_archive_hour_out_of_range_fails_fast(monkeypatch):
@@ -46,3 +58,19 @@ def test_env_overrides(monkeypatch):
         passthrough_url="http://legacy:8080/pub",
         archive_hour_utc=7,
     )
+
+
+def test_geofence_env_vars(monkeypatch):
+    monkeypatch.setenv("CT_HOME_LAT", "40.7")
+    monkeypatch.setenv("CT_HOME_LON", "-74.4")
+    monkeypatch.setenv("CT_HOME_RADIUS_M", "60")
+    monkeypatch.setenv("CT_WORK_LAT", "40.75")
+    monkeypatch.setenv("CT_WORK_LON", "-73.99")
+    monkeypatch.setenv("CT_WORK_RADIUS_M", "120")
+    s = load_settings()
+    assert s.home_lat == 40.7
+    assert s.home_lon == -74.4
+    assert s.home_radius_m == 60.0
+    assert s.work_lat == 40.75
+    assert s.work_lon == -73.99
+    assert s.work_radius_m == 120.0

@@ -13,6 +13,12 @@ class Settings:
     s3_region: str | None
     passthrough_url: str | None
     archive_hour_utc: int
+    home_lat: float = 0.0  # 0.0/0.0 (with home_lon) = geofence unset
+    home_lon: float = 0.0
+    home_radius_m: float = 50.0
+    work_lat: float = 0.0  # 0.0/0.0 (with work_lon) = geofence unset
+    work_lon: float = 0.0
+    work_radius_m: float = 150.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.archive_hour_utc <= 23:
@@ -27,4 +33,10 @@ def load_settings() -> Settings:
         s3_region=os.environ.get("CT_S3_REGION") or None,
         passthrough_url=os.environ.get("CT_PASSTHROUGH_URL") or None,
         archive_hour_utc=int(os.environ.get("CT_ARCHIVE_HOUR_UTC", "6")),
+        home_lat=float(os.environ.get("CT_HOME_LAT", "0.0")),
+        home_lon=float(os.environ.get("CT_HOME_LON", "0.0")),
+        home_radius_m=float(os.environ.get("CT_HOME_RADIUS_M", "50")),
+        work_lat=float(os.environ.get("CT_WORK_LAT", "0.0")),
+        work_lon=float(os.environ.get("CT_WORK_LON", "0.0")),
+        work_radius_m=float(os.environ.get("CT_WORK_RADIUS_M", "150")),
     )

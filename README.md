@@ -259,9 +259,9 @@ Six-page Streamlit dashboard at port `8501`:
 - S3 sync runs every 5 minutes with automatic retry
 - All derived data can be rebuilt from raw at any time
 
-## Rewrite backend (phase 1)
+## Rewrite backend
 
-A new ingestion and archive service (`backend/`) is being built alongside the existing stack. It runs independently on port `8090`, stores data in `data_v2/`, and forwards every payload to the legacy receiver so the existing dashboard stays fed during the migration.
+A new ingestion, trip-engine, and archive service (`backend/`) runs alongside the existing stack. It runs independently on port `8090`, stores data in `data_v2/`, and forwards every payload to the legacy receiver so the existing dashboard stays fed during the migration.
 
 ### Run locally
 
@@ -275,6 +275,8 @@ uvicorn backend.app:app --port 8090
 |--------|------|-------------|
 | `POST` | `/ingest/owntracks` | OwnTracks front door — always returns 200 |
 | `GET` | `/api/health/ingestion` | Health and backlog status |
+| `GET` | `/api/trips?limit=` | Trip list, newest first (default 50) |
+| `GET` | `/api/trips/{trip_id}` | Trip detail: segments + GPS points |
 
 ### Environment variables
 
@@ -286,6 +288,18 @@ uvicorn backend.app:app --port 8090
 | `CT_S3_REGION` | — | AWS region for the bucket |
 | `CT_PASSTHROUGH_URL` | — | Forward ingested payloads to the legacy receiver |
 | `CT_ARCHIVE_HOUR_UTC` | `6` | Hour (UTC) at which the daily archive job runs |
+| `CT_HOME_LAT` / `CT_HOME_LON` / `CT_HOME_RADIUS_M` | — | Home geofence for commute direction tagging (unset = no direction detection) |
+| `CT_WORK_LAT` / `CT_WORK_LON` / `CT_WORK_RADIUS_M` | — | Work geofence for commute direction tagging (unset = no direction detection) |
+
+### Rebuild derived store
+
+Truncate and replay the full raw archive into the derived trip store:
+
+```bash
+python -m backend.engine.rebuild
+```
+
+This also runs automatically at startup so the trip store is always in sync with the archive on restart.
 
 ### Docker
 

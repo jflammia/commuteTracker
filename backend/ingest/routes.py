@@ -29,6 +29,10 @@ def make_ingest_router() -> APIRouter:
                     "payload": payload,
                 }
                 store.append("owntracks", record)
+                try:
+                    request.app.state.runner.process_payload(payload)
+                except Exception:
+                    log.exception("engine processing failed — raw is safe; rebuild recovers")
             except (json.JSONDecodeError, UnicodeDecodeError):
                 store.append(
                     "owntracks",
