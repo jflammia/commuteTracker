@@ -53,7 +53,7 @@ def candidate_itineraries(
         "JOIN gtfs_stops s2 ON s2.source = st2.source AND s2.stop_id = st2.stop_id "
         "WHERE st1.source = ? AND st1.stop_id = ? AND st2.stop_id = ? "
         "  AND st1.stop_sequence < st2.stop_sequence "
-        "ORDER BY st1.departure_s DESC",
+        "ORDER BY st1.departure_s DESC, t.trip_id",
         [source, board_stop, alight_stop],
     ).fetchall()
     out = []

@@ -95,3 +95,37 @@ def test_itinerary_carries_schedule_fields(settings):
     assert it.scheduled_dep_s == 8 * 3600 + 2 * 60 or it.scheduled_dep_s == 7 * 3600 + 38 * 60
     assert it.scheduled_arr_s > it.scheduled_dep_s
     assert it.route_name == "Northeast Corridor"
+
+
+def test_same_departure_trains_have_stable_order(settings):
+    # two trains departing the SAME minute from MP, different trip_ids
+    stops = [("MP", "Metropark", 40.70, -74.40), ("NYP", "New York Penn", 40.75, -73.99)]
+    trips = [
+        ("ZEBRA", "WK", "NYP", [("MP", "07:38:00"), ("NYP", "08:15:00")]),
+        ("ALPHA", "WK", "NYP", [("MP", "07:38:00"), ("NYP", "08:20:00")]),
+    ]
+    z = build_gtfs_zip(stops, trips, route_type=2, route_name="Northeast Corridor")
+    RawStore(settings.data_dir).append(
+        "gtfs_njt",
+        {
+            "received_at": "2026-06-09T05:00:00+00:00",
+            "payload": {"url": "u", "status": 200, "b64": base64.b64encode(z).decode()},
+        },
+    )
+    store = DerivedStore(settings)
+    snap = latest_snapshot(settings, "gtfs_njt")
+    orders = []
+    for _ in range(3):
+        parse_gtfs(store.con, "gtfs_njt", snap, fetched_at="x")  # re-parse scrambles row order
+        its = candidate_itineraries(
+            store.con,
+            source="gtfs_njt",
+            board_stop="MP",
+            alight_stop="NYP",
+            service_date="20260610",
+            arrive_by_local_s=9 * 3600,
+            egress_pad_s=300.0,
+        )
+        orders.append([it.gtfs_trip_id for it in its])
+    assert all(o == orders[0] for o in orders), orders  # stable across re-parses
+    assert orders[0] == ["ALPHA", "ZEBRA"]  # same departure → trip_id asc tiebreak
