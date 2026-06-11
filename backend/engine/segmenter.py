@@ -23,7 +23,9 @@ def _smooth(modes: list[str]) -> list[str]:
     for i in range(len(modes)):
         lo, hi = max(0, i - 2), min(len(modes), i + 3)
         window = modes[lo:hi]
-        best = max(set(window), key=lambda m: (window.count(m), m == modes[i]))
+        best = max(
+            sorted(set(window)), key=lambda m: (window.count(m), m == modes[i])
+        )  # sorted() makes tie-breaks deterministic (set order is hash-randomized)
         out.append(best)
     return out
 

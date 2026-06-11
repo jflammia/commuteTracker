@@ -62,3 +62,22 @@ def test_segments_tile_the_trip():
     for a, b in zip(segs, segs[1:]):
         assert a.end_ts <= b.start_ts
     assert sum(s.point_count for s in segs) == len(pts)
+
+
+def test_smoothing_tie_break_is_deterministic():
+    # 3-mode window where two modes tie and neither is the point's own mode:
+    # raw modes [stationary, stationary, walk, vehicle, vehicle] — the middle
+    # point (walk) must smooth to the same value on every run regardless of
+    # PYTHONHASHSEED (set iteration order must not leak into output).
+    specs = [(60, 0.2), (30, 1.5), (60, 20.0)]
+    pts = _pts(specs)
+    segs1 = segment_trip("t1", pts, P)
+    segs2 = segment_trip("t1", pts, P)
+    assert [s.mode for s in segs1] == [s.mode for s in segs2]
+    # pin the exact resolution so a future refactor can't silently change it:
+    # sorted(['stationary','vehicle','walk']) → stationary is first, so max()
+    # returns 'stationary' when stationary and vehicle tie at count=2
+    assert [(s.mode, s.point_count) for s in segs1] == [
+        ("stationary", 3),
+        ("vehicle", 2),
+    ]
