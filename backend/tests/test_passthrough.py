@@ -1,5 +1,3 @@
-import asyncio
-
 import httpx
 import pytest
 
@@ -24,7 +22,7 @@ async def test_forwards_body_and_headers():
     transport = httpx.MockTransport(handler)
     pt = Passthrough("http://legacy:8080/pub", transport=transport)
     await pt.forward(b'{"_type":"location"}', {"x-limit-u": "justin"})
-    await asyncio.sleep(0)  # let the fire-and-forget task run
+    await pt.aclose()
     assert seen["url"] == "http://legacy:8080/pub"
     assert seen["body"] == b'{"_type":"location"}'
     assert seen["u"] == "justin"
@@ -37,4 +35,4 @@ async def test_legacy_failure_never_raises():
 
     pt = Passthrough("http://legacy:8080/pub", transport=httpx.MockTransport(handler))
     await pt.forward(b"{}", {})  # must not raise
-    await asyncio.sleep(0)
+    await pt.aclose()  # must not raise either

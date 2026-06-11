@@ -20,6 +20,7 @@ class Passthrough:
         self._client = (
             httpx.AsyncClient(transport=transport, timeout=5.0) if url is not None else None
         )
+        self._inflight: set[asyncio.Task] = set()
 
     @property
     def enabled(self) -> bool:
@@ -36,8 +37,13 @@ class Passthrough:
             except Exception as exc:
                 log.warning("passthrough to legacy failed: %s", exc)
 
-        asyncio.get_running_loop().create_task(_send())
+        task = asyncio.get_running_loop().create_task(_send())
+        self._inflight.add(task)
+        task.add_done_callback(self._inflight.discard)
 
     async def aclose(self) -> None:
+        # Wired into the app lifespan in Task 9 of the phase-1 plan.
+        if self._inflight:
+            await asyncio.gather(*self._inflight, return_exceptions=True)
         if self._client is not None:
             await self._client.aclose()
