@@ -1,5 +1,15 @@
 # Production Cutover Runbook — legacy app → rewrite backend
 
+> **STATUS: EXECUTED 2026-06-11.** The rewrite is live on bighead and verified
+> (ingest flowing, SvelteKit UI served, `/pub` Basic Auth active, PATH feeds
+> archiving; 321,237 historical records migrated). The cutover was done
+> **Forgejo-native**, not via GHCR: the Komodo Build (`Dockerfile.backend`)
+> publishes to `git.blueshift.xyz/justin/commutetracker` and the bighead stack
+> deploys it. Both "blocking gaps" below are resolved — gap #1 by building into
+> the Forgejo registry (not GHCR), gap #2 by the auth gate ported in
+> commuteTracker#27. This document is retained as historical reference and a
+> rollback guide. See the `prod-deploy-topology` memory for the current state.
+
 The rewrite (phases 1–5) replaces the legacy Streamlit app. As of the release
 that includes this runbook, `release.yml` builds and publishes the **rewrite
 backend** image (`Dockerfile.backend`: FastAPI + bundled SvelteKit frontend) to
