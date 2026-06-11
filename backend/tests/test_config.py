@@ -32,6 +32,8 @@ def test_defaults(monkeypatch):
         "CT_ARRIVE_BY_LOCAL",
         "CT_ACCESS_DISTANCE_M",
         "CT_EGRESS_DISTANCE_M",
+        "OWNTRACKS_USERNAME",
+        "OWNTRACKS_PASSWORD",
     ):
         monkeypatch.delenv(var, raising=False)
     s = load_settings()
@@ -50,6 +52,8 @@ def test_defaults(monkeypatch):
     assert s.path_gtfs_url is None
     assert s.source_poll_interval_s == 60.0
     assert s.commute_source is None
+    assert s.owntracks_username is None
+    assert s.owntracks_password is None
 
 
 def test_archive_hour_out_of_range_fails_fast(monkeypatch):
@@ -139,3 +143,11 @@ def test_optimizer_env_vars(monkeypatch):
     assert s.arrive_by_local == "09:00"
     assert s.access_distance_m == 500.0
     assert s.egress_distance_m == 650.0
+
+
+def test_owntracks_auth_env_vars(monkeypatch):
+    monkeypatch.setenv("OWNTRACKS_USERNAME", "owntracks")
+    monkeypatch.setenv("OWNTRACKS_PASSWORD", "secret-pw-123")
+    s = load_settings()
+    assert s.owntracks_username == "owntracks"
+    assert s.owntracks_password == "secret-pw-123"
