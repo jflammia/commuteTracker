@@ -2,6 +2,10 @@
 
 Local raw files are deleted only after the Parquet copy is verified.
 Payload is stored as a verbatim JSON string — schema-stable forever.
+
+A malformed line fails its whole day: the raw file is kept and retried on every
+run until fixed manually; the backlog is visible as raw_backlog_days in the
+health endpoint.
 """
 
 import json
@@ -86,7 +90,9 @@ class Archiver:
             pq = self._parquet_path(stream, day)
             pq.parent.mkdir(parents=True, exist_ok=True)
             frame.write_parquet(pq)
-            if pl.read_parquet(pq).height != frame.height:
+            # Verifies the write completed (torn/short writes), not content integrity.
+            written = pl.scan_parquet(pq).select(pl.len()).collect().item()
+            if written != frame.height:
                 raise RuntimeError("parquet row-count mismatch after write")
             self._upload_and_verify(stream, day, pq)
             raw_file.unlink()
