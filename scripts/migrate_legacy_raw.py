@@ -20,8 +20,10 @@ from backend.storage.raw import RawStore
 
 def record_from_row(received_at: str, user: str, device: str, payload_text: str) -> dict:
     payload = json.loads(payload_text)
+    if not isinstance(payload, dict):
+        raise ValueError(f"payload is not a JSON object: {payload_text[:80]}")
     tst = payload.get("tst")
-    if isinstance(tst, (int, float)):
+    if isinstance(tst, (int, float)) and not isinstance(tst, bool):
         ts = datetime.fromtimestamp(tst, tz=UTC)
     else:
         ts = datetime.fromisoformat(received_at.replace(" ", "T")).replace(tzinfo=UTC)
@@ -34,9 +36,10 @@ def record_from_row(received_at: str, user: str, device: str, payload_text: str)
 
 
 def migrate(db_path: Path, data_dir: Path) -> dict:
-    raw_dir = data_dir / "raw" / "owntracks"
-    if raw_dir.exists() and any(raw_dir.glob("*.jsonl")):
-        raise SystemExit(f"refusing: {raw_dir} already contains raw files")
+    for stream_dir_name in ("owntracks", "owntracks_malformed"):
+        d = data_dir / "raw" / stream_dir_name
+        if d.exists() and any(d.glob("*.jsonl")):
+            raise SystemExit(f"refusing: {d} already contains raw files")
 
     store = RawStore(data_dir)
     per_day: Counter = Counter()
@@ -46,21 +49,28 @@ def migrate(db_path: Path, data_dir: Path) -> dict:
             "SELECT received_at, user, device, payload FROM location_records ORDER BY id"
         )
         total = 0
+        malformed_count = 0
         for received_at, user, device, payload_text in rows:
             try:
                 rec = record_from_row(received_at, user, device, payload_text)
                 store.append("owntracks", rec)
                 per_day[rec["received_at"][:10]] += 1
-            except (json.JSONDecodeError, ValueError):
+            except (json.JSONDecodeError, ValueError, OverflowError, OSError):
                 store.append(
                     "owntracks",
                     {"received_at": f"{received_at[:10]}T00:00:00+00:00", "raw": payload_text},
                     malformed=True,
                 )
+                malformed_count += 1
             total += 1
     finally:
         con.close()
-    return {"total": total, "per_day": dict(sorted(per_day.items()))}
+    return {
+        "total": total,
+        "migrated": total - malformed_count,
+        "malformed": malformed_count,
+        "per_day": dict(sorted(per_day.items())),
+    }
 
 
 if __name__ == "__main__":
