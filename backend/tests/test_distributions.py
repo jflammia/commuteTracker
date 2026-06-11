@@ -47,3 +47,9 @@ def test_mean_and_count():
     d = EmpiricalDistribution(samples=[100, 200, 300], prior_mean=0, prior_weight=0)
     assert d.observed_count == 3
     assert abs(d.observed_mean - 200.0) < 1e-9
+
+
+def test_empty_prior_median_equals_mean_for_any_weight():
+    for w in (1, 2, 3, 4, 5, 8, 20):
+        d = EmpiricalDistribution(samples=[], prior_mean=420.0, prior_weight=w, prior_spread=60.0)
+        assert abs(d.quantile(0.5) - 420.0) < 1.0, f"weight={w}"
