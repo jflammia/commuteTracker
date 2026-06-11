@@ -35,3 +35,4 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+.superpowers/
