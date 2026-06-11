@@ -30,6 +30,31 @@ CREATE TABLE IF NOT EXISTS trip_points (
 CREATE TABLE IF NOT EXISTS rejected_points (
     ts DOUBLE, lat DOUBLE, lon DOUBLE, reason VARCHAR
 );
+CREATE TABLE IF NOT EXISTS gtfs_feeds (
+    source VARCHAR, fetched_at VARCHAR
+);
+CREATE TABLE IF NOT EXISTS gtfs_stops (
+    source VARCHAR, stop_id VARCHAR, stop_name VARCHAR, stop_lat DOUBLE, stop_lon DOUBLE
+);
+CREATE TABLE IF NOT EXISTS gtfs_routes (
+    source VARCHAR, route_id VARCHAR, route_name VARCHAR, route_type INTEGER
+);
+CREATE TABLE IF NOT EXISTS gtfs_trips (
+    source VARCHAR, trip_id VARCHAR, route_id VARCHAR, service_id VARCHAR,
+    headsign VARCHAR
+);
+CREATE TABLE IF NOT EXISTS gtfs_stop_times (
+    source VARCHAR, trip_id VARCHAR, stop_id VARCHAR, stop_sequence INTEGER,
+    arrival_s INTEGER, departure_s INTEGER
+);
+CREATE TABLE IF NOT EXISTS gtfs_calendar (
+    source VARCHAR, service_id VARCHAR, monday INTEGER, tuesday INTEGER,
+    wednesday INTEGER, thursday INTEGER, friday INTEGER, saturday INTEGER,
+    sunday INTEGER, start_date VARCHAR, end_date VARCHAR
+);
+CREATE TABLE IF NOT EXISTS gtfs_calendar_dates (
+    source VARCHAR, service_id VARCHAR, date VARCHAR, exception_type INTEGER
+);
 """
 
 
@@ -113,8 +138,25 @@ class DerivedStore:
     def rejected_count(self) -> int:
         return self._con.execute("SELECT count(*) FROM rejected_points").fetchone()[0]
 
+    @property
+    def con(self) -> duckdb.DuckDBPyConnection:
+        """Shared connection for schedule/match modules (single-process app)."""
+        return self._con
+
     def truncate(self) -> None:
-        for table in ("trips", "segments", "trip_points", "rejected_points"):
+        for table in (
+            "trips",
+            "segments",
+            "trip_points",
+            "rejected_points",
+            "gtfs_feeds",
+            "gtfs_stops",
+            "gtfs_routes",
+            "gtfs_trips",
+            "gtfs_stop_times",
+            "gtfs_calendar",
+            "gtfs_calendar_dates",
+        ):
             self._con.execute(f"DELETE FROM {table}")
 
     def list_trips(self, limit: int = 50) -> list[dict]:
