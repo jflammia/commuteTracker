@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from backend.config import Settings, load_settings
 from backend.engine.runner import EngineRunner
 from backend.ingest.passthrough import Passthrough
+from backend.api.labels import make_labels_router
 from backend.api.trips import make_trips_router
 from backend.health.routes import make_health_router
 from backend.ingest.routes import make_ingest_router
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(make_ingest_router())
     app.include_router(make_health_router())
     app.include_router(make_trips_router())
+    app.include_router(make_labels_router())
     return app
 
 
