@@ -24,6 +24,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "echarts": "^5.5.0",
     "maplibre-gl": "^5.0.0"
   }
 }
