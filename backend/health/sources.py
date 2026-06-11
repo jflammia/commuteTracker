@@ -5,6 +5,7 @@ from datetime import datetime
 
 from backend.config import Settings
 from backend.sources.framework import sources_from_settings
+from backend.sources.njt import njt_specs_from_settings
 from backend.storage.raw import RawStore
 
 
@@ -13,7 +14,8 @@ def sources_snapshot(settings: Settings, *, now_iso: str) -> list[dict]:
     today = now_iso[:10]
     store = RawStore(settings.data_dir)
     out = []
-    for spec in sources_from_settings(settings):
+    all_specs = list(sources_from_settings(settings)) + list(njt_specs_from_settings(settings))
+    for spec in all_specs:
         last_at = None
         last_status = None
         # Note: only reads today's day file (UTC). A daily source can show

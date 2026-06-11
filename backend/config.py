@@ -20,10 +20,12 @@ class Settings:
     work_lon: float = 0.0
     work_radius_m: float = 150.0
     path_gtfs_url: str | None = None  # unset = source disabled
-    njt_gtfs_url: str | None = None
     path_rt_url: str | None = None
-    njt_rt_tripupdates_url: str | None = None
-    njt_rt_alerts_url: str | None = None
+    njt_username: str | None = None  # CT_NJT_USERNAME — unset = NJT disabled
+    njt_password: str | None = None  # CT_NJT_PASSWORD
+    njt_api_base: str = (
+        "https://raildata.njtransit.com/api/GTFSRT"  # CT_NJT_API_BASE (tests override)
+    )
     source_poll_interval_s: float = 60.0
     gtfs_refresh_interval_s: float = 86400.0
     frontend_build_dir: Path | None = None  # unset = no SPA serving
@@ -49,10 +51,10 @@ def load_settings() -> Settings:
         work_lon=float(os.environ.get("CT_WORK_LON", "0.0")),
         work_radius_m=float(os.environ.get("CT_WORK_RADIUS_M", "150")),
         path_gtfs_url=os.environ.get("CT_PATH_GTFS_URL") or None,
-        njt_gtfs_url=os.environ.get("CT_NJT_GTFS_URL") or None,
         path_rt_url=os.environ.get("CT_PATH_RT_URL") or None,
-        njt_rt_tripupdates_url=os.environ.get("CT_NJT_RT_TRIPUPDATES_URL") or None,
-        njt_rt_alerts_url=os.environ.get("CT_NJT_RT_ALERTS_URL") or None,
+        njt_username=os.environ.get("CT_NJT_USERNAME") or None,
+        njt_password=os.environ.get("CT_NJT_PASSWORD") or None,
+        njt_api_base=os.environ.get("CT_NJT_API_BASE", "https://raildata.njtransit.com/api/GTFSRT"),
         source_poll_interval_s=float(os.environ.get("CT_SOURCE_POLL_INTERVAL_S", "60")),
         gtfs_refresh_interval_s=float(os.environ.get("CT_GTFS_REFRESH_INTERVAL_S", "86400")),
         frontend_build_dir=(
