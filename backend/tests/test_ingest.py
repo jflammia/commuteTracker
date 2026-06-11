@@ -53,3 +53,17 @@ def test_store_failure_still_returns_200(client, monkeypatch):
     monkeypatch.setattr(RawStore, "append", boom)
     resp = client.post("/ingest/owntracks", json={"_type": "location"})
     assert resp.status_code == 200
+
+
+def test_store_failure_logs_context(client, monkeypatch, caplog):
+    from backend.storage.raw import RawStore
+
+    def boom(self, *a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(RawStore, "append", boom)
+    with caplog.at_level("ERROR"):
+        resp = client.post("/ingest/owntracks", json={"_type": "location"})
+    assert resp.status_code == 200
+    assert "data may be lost" in caplog.text
+    assert "location" in caplog.text  # body prefix included

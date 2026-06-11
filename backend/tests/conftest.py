@@ -12,3 +12,8 @@ def settings(tmp_path):
         passthrough_url=None,
         archive_hour_utc=6,
     )
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"

@@ -17,6 +17,7 @@ def make_ingest_router() -> APIRouter:
     async def ingest_owntracks(request: Request) -> JSONResponse:
         store = request.app.state.raw_store
         received_at = datetime.now(UTC).isoformat()
+        body: bytes | None = None
         try:
             body = await request.body()
             try:
@@ -34,8 +35,18 @@ def make_ingest_router() -> APIRouter:
                     {"received_at": received_at, "raw": body.decode("utf-8", errors="replace")},
                     malformed=True,
                 )
+            try:
+                await request.app.state.passthrough.forward(body, dict(request.headers))
+            except Exception:
+                log.exception("passthrough dispatch failed")
         except Exception:
-            log.exception("ingest failed past raw append — data may be lost")
+            log.exception(
+                "ingest failed — data may be lost (received_at=%s user=%s device=%s body[:500]=%r)",
+                received_at,
+                request.headers.get("X-Limit-U"),
+                request.headers.get("X-Limit-D"),
+                body[:500] if body is not None else None,
+            )
         return JSONResponse(content=[], status_code=200)
 
     return router
