@@ -19,6 +19,13 @@ class Settings:
     work_lat: float = 0.0  # 0.0/0.0 (with work_lon) = geofence unset
     work_lon: float = 0.0
     work_radius_m: float = 150.0
+    path_gtfs_url: str | None = None  # unset = source disabled
+    njt_gtfs_url: str | None = None
+    path_rt_url: str | None = None
+    njt_rt_tripupdates_url: str | None = None
+    njt_rt_alerts_url: str | None = None
+    source_poll_interval_s: float = 60.0
+    gtfs_refresh_interval_s: float = 86400.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.archive_hour_utc <= 23:
@@ -39,4 +46,11 @@ def load_settings() -> Settings:
         work_lat=float(os.environ.get("CT_WORK_LAT", "0.0")),
         work_lon=float(os.environ.get("CT_WORK_LON", "0.0")),
         work_radius_m=float(os.environ.get("CT_WORK_RADIUS_M", "150")),
+        path_gtfs_url=os.environ.get("CT_PATH_GTFS_URL") or None,
+        njt_gtfs_url=os.environ.get("CT_NJT_GTFS_URL") or None,
+        path_rt_url=os.environ.get("CT_PATH_RT_URL") or None,
+        njt_rt_tripupdates_url=os.environ.get("CT_NJT_RT_TRIPUPDATES_URL") or None,
+        njt_rt_alerts_url=os.environ.get("CT_NJT_RT_ALERTS_URL") or None,
+        source_poll_interval_s=float(os.environ.get("CT_SOURCE_POLL_INTERVAL_S", "60")),
+        gtfs_refresh_interval_s=float(os.environ.get("CT_GTFS_REFRESH_INTERVAL_S", "86400")),
     )

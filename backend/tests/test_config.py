@@ -19,6 +19,13 @@ def test_defaults(monkeypatch):
         "CT_WORK_LAT",
         "CT_WORK_LON",
         "CT_WORK_RADIUS_M",
+        "CT_PATH_GTFS_URL",
+        "CT_NJT_GTFS_URL",
+        "CT_PATH_RT_URL",
+        "CT_NJT_RT_TRIPUPDATES_URL",
+        "CT_NJT_RT_ALERTS_URL",
+        "CT_SOURCE_POLL_INTERVAL_S",
+        "CT_GTFS_REFRESH_INTERVAL_S",
     ):
         monkeypatch.delenv(var, raising=False)
     s = load_settings()
@@ -34,6 +41,8 @@ def test_defaults(monkeypatch):
     assert s.work_lat == 0.0
     assert s.work_lon == 0.0
     assert s.work_radius_m == 150.0
+    assert s.path_gtfs_url is None
+    assert s.source_poll_interval_s == 60.0
 
 
 def test_archive_hour_out_of_range_fails_fast(monkeypatch):
@@ -58,6 +67,24 @@ def test_env_overrides(monkeypatch):
         passthrough_url="http://legacy:8080/pub",
         archive_hour_utc=7,
     )
+
+
+def test_source_env_vars(monkeypatch):
+    monkeypatch.setenv("CT_PATH_GTFS_URL", "https://example.com/path.zip")
+    monkeypatch.setenv("CT_NJT_GTFS_URL", "https://user:pass@example.com/njt.zip")
+    monkeypatch.setenv("CT_PATH_RT_URL", "https://example.com/path-rt")
+    monkeypatch.setenv("CT_NJT_RT_TRIPUPDATES_URL", "https://example.com/njt-tu")
+    monkeypatch.setenv("CT_NJT_RT_ALERTS_URL", "https://example.com/njt-al")
+    monkeypatch.setenv("CT_SOURCE_POLL_INTERVAL_S", "30")
+    monkeypatch.setenv("CT_GTFS_REFRESH_INTERVAL_S", "43200")
+    s = load_settings()
+    assert s.path_gtfs_url == "https://example.com/path.zip"
+    assert s.njt_gtfs_url == "https://user:pass@example.com/njt.zip"
+    assert s.path_rt_url == "https://example.com/path-rt"
+    assert s.njt_rt_tripupdates_url == "https://example.com/njt-tu"
+    assert s.njt_rt_alerts_url == "https://example.com/njt-al"
+    assert s.source_poll_interval_s == 30.0
+    assert s.gtfs_refresh_interval_s == 43200.0
 
 
 def test_geofence_env_vars(monkeypatch):
