@@ -1,3 +1,5 @@
+import json
+
 from backend.engine.machine import EngineState, TripEngine
 from backend.engine.params import EngineParams
 from backend.engine.types import TripClosed
@@ -28,7 +30,7 @@ def test_split_replay_equals_full_replay():
         trips_a = _trips(_events(first, stream[:split]))
         # serialize → restore (simulates process restart)
         second = TripEngine(EngineParams(), geofences=[])
-        second.state = EngineState.from_dict(first.state.to_dict())
+        second.state = EngineState.from_dict(json.loads(json.dumps(first.state.to_dict())))
         trips_b = _trips(_events(second, stream[split:]))
         assert trips_a + trips_b == full_trips, f"diverged at split={split}"
         assert second.state == full.state, f"state diverged at split={split}"
