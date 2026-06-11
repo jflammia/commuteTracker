@@ -8,12 +8,14 @@ run until fixed manually; the backlog is visible as raw_backlog_days in the
 health endpoint.
 """
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import boto3
 import polars as pl
 
 from backend.config import Settings
@@ -102,7 +104,14 @@ class Archiver:
             return ArchiveResult(stream=stream, day=day, rows=0, ok=False, error=str(exc))
 
     def _upload_and_verify(self, stream: str, day: str, pq: Path) -> None:
-        """S3 upload + read-back verification. No-op until Task 7 wires S3."""
+        """Upload parquet to S3 and verify via read-back checksum. No-op when s3_bucket is unset."""
         if self._settings.s3_bucket is None:
             return
-        raise NotImplementedError  # implemented in Task 7
+        y, m, d = day.split("-")
+        key = f"{self._settings.s3_prefix}/raw/{stream}/year={y}/month={m}/day={d}/data.parquet"
+        data = pq.read_bytes()
+        client = boto3.client("s3")
+        client.put_object(Bucket=self._settings.s3_bucket, Key=key, Body=data)
+        echoed = client.get_object(Bucket=self._settings.s3_bucket, Key=key)["Body"].read()
+        if hashlib.sha256(echoed).digest() != hashlib.sha256(data).digest():
+            raise RuntimeError(f"S3 read-back checksum mismatch for {key}")
