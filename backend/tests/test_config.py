@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.config import Settings, load_settings
+from backend.config import load_settings
 
 
 def test_defaults(monkeypatch):
@@ -58,15 +58,30 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("CT_S3_REGION", "us-east-2")
     monkeypatch.setenv("CT_PASSTHROUGH_URL", "http://legacy:8080/pub")
     monkeypatch.setenv("CT_ARCHIVE_HOUR_UTC", "7")
+    monkeypatch.delenv("CT_FRONTEND_BUILD_DIR", raising=False)
     s = load_settings()
-    assert s == Settings(
-        data_dir=Path("/srv/ct"),
-        s3_bucket="my-bucket",
-        s3_prefix="ct-prod",
-        s3_region="us-east-2",
-        passthrough_url="http://legacy:8080/pub",
-        archive_hour_utc=7,
-    )
+    assert s.data_dir == Path("/srv/ct")
+    assert s.s3_bucket == "my-bucket"
+    assert s.s3_prefix == "ct-prod"
+    assert s.s3_region == "us-east-2"
+    assert s.passthrough_url == "http://legacy:8080/pub"
+    assert s.archive_hour_utc == 7
+
+
+def test_frontend_build_dir_env_override(monkeypatch, tmp_path):
+    build = tmp_path / "build"
+    build.mkdir()
+    monkeypatch.setenv("CT_FRONTEND_BUILD_DIR", str(build))
+    s = load_settings()
+    assert s.frontend_build_dir == build
+
+
+def test_frontend_build_dir_env_nonexistent_still_used(monkeypatch, tmp_path):
+    """CT_FRONTEND_BUILD_DIR env var wins even when the path doesn't exist."""
+    dummy = tmp_path / "no-such-build"
+    monkeypatch.setenv("CT_FRONTEND_BUILD_DIR", str(dummy))
+    s = load_settings()
+    assert s.frontend_build_dir == dummy
 
 
 def test_source_env_vars(monkeypatch):

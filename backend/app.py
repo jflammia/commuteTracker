@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from backend.config import Settings, load_settings
 from backend.engine.runner import EngineRunner
@@ -56,6 +57,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(make_health_router())
     app.include_router(make_trips_router())
     app.include_router(make_labels_router())
+
+    if settings.frontend_build_dir is not None and settings.frontend_build_dir.is_dir():
+        build_dir = settings.frontend_build_dir
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def spa(path: str) -> FileResponse:
+            target = build_dir / path
+            if path and target.is_file():
+                return FileResponse(target)
+            return FileResponse(build_dir / "index.html")
+
     return app
 
 

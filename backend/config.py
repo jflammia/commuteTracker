@@ -26,6 +26,7 @@ class Settings:
     njt_rt_alerts_url: str | None = None
     source_poll_interval_s: float = 60.0
     gtfs_refresh_interval_s: float = 86400.0
+    frontend_build_dir: Path | None = None  # unset = no SPA serving
 
     def __post_init__(self) -> None:
         if not 0 <= self.archive_hour_utc <= 23:
@@ -33,6 +34,7 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    _default_build = Path(__file__).resolve().parent.parent / "frontend" / "build"
     return Settings(
         data_dir=Path(os.environ.get("CT_DATA_DIR", "data_v2")),
         s3_bucket=os.environ.get("CT_S3_BUCKET") or None,
@@ -53,4 +55,9 @@ def load_settings() -> Settings:
         njt_rt_alerts_url=os.environ.get("CT_NJT_RT_ALERTS_URL") or None,
         source_poll_interval_s=float(os.environ.get("CT_SOURCE_POLL_INTERVAL_S", "60")),
         gtfs_refresh_interval_s=float(os.environ.get("CT_GTFS_REFRESH_INTERVAL_S", "86400")),
+        frontend_build_dir=(
+            Path(os.environ["CT_FRONTEND_BUILD_DIR"])
+            if os.environ.get("CT_FRONTEND_BUILD_DIR")
+            else (_default_build if _default_build.is_dir() else None)
+        ),
     )
