@@ -50,5 +50,26 @@ services:
       start_period: 15s
       retries: 3
 
+  # ── New backend (rewrite phase 1) ─────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8090:8090"
+    environment:
+      # S3 archive upload disabled by default — set CT_S3_BUCKET (+ AWS creds) to enable
+      CT_DATA_DIR: /data
+      CT_PASSTHROUGH_URL: http://receiver:8080/pub
+    volumes:
+      - ./data_v2:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/api/health/ingestion')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
 volumes:
   commute-data:

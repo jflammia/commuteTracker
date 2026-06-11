@@ -24,10 +24,10 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff check
-        run: ruff check src/ tests/
+        run: ruff check src/ tests/ backend/
 
       - name: Run ruff format check
-        run: ruff format --check src/ tests/
+        run: ruff format --check src/ tests/ backend/
 
   test:
     name: Test
@@ -54,3 +54,6 @@ jobs:
 
       - name: Build image
         run: docker build -t commute-tracker:test .
+
+      - name: Build backend Docker image
+        run: docker build -f Dockerfile.backend -t commute-tracker-backend:test .
