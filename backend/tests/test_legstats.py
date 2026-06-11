@@ -1,5 +1,9 @@
 from backend.optimizer.legs import LegObservation
+from backend.optimizer.legstats import LegModels
+from backend.optimizer.params import OptimizerParams
 from backend.storage.derived import DerivedStore
+
+P = OptimizerParams()
 
 
 def _obs(trip_id, kind, dur, **kw):
@@ -65,3 +69,62 @@ def test_write_and_read_recommendation(settings):
     rec = store.recommendation("2026-06-11", "outbound")
     assert rec["options"][0]["gtfs_trip_id"] == "NEC3838"
     assert store.recommendation("2026-06-12", "outbound") is None
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Leg models from observations
+# ---------------------------------------------------------------------------
+
+
+def test_access_model_from_observations(settings):
+    store = DerivedStore(settings)
+    store.write_leg_observations("t1", [_obs("t1", "access", 300.0, distance_m=400.0)])
+    store.write_leg_observations("t2", [_obs("t2", "access", 360.0, distance_m=400.0)])
+    models = LegModels.build(store.leg_observations(), P)
+    dist = models.access("outbound")
+    assert 300.0 <= dist.quantile(0.5) <= 360.0
+    assert dist.observed_count == 2
+
+
+def test_access_model_no_observations_uses_distance_prior(settings):
+    store = DerivedStore(settings)
+    models = LegModels.build(store.leg_observations(), P)
+    # no observations: caller supplies the expected distance, prior = dist/speed
+    dist = models.access("outbound", distance_m=650.0)
+    expected = 650.0 / P.walk_speed_mps
+    assert abs(dist.quantile(0.5) - expected) < expected * 0.3
+    assert dist.observed_count == 0
+
+
+def test_ride_model_uses_delta_history(settings):
+    store = DerivedStore(settings)
+    for tid, delta in (("t1", 60.0), ("t2", 120.0), ("t3", 0.0)):
+        store.write_leg_observations(
+            tid,
+            [
+                _obs(
+                    tid,
+                    "ride:gtfs_njt:NEC",
+                    2220.0,
+                    route_name="NEC",
+                    source="gtfs_njt",
+                    gtfs_trip_id="NEC3838",
+                    delta_s=delta,
+                    scheduled_dep_s=27600,
+                )
+            ],
+        )
+    models = LegModels.build(store.leg_observations(), P)
+    # the ride distribution is scheduled_ride + delay spread; with 3 deltas it
+    # has real observations
+    dist = models.ride("gtfs_njt", "NEC", scheduled_ride_s=2220.0)
+    assert dist.observed_count == 3
+    assert dist.quantile(0.5) >= 2220.0  # ride never beats schedule meaningfully here
+
+
+def test_ride_model_unknown_route_falls_back_to_schedule(settings):
+    store = DerivedStore(settings)
+    models = LegModels.build(store.leg_observations(), P)
+    dist = models.ride("gtfs_njt", "Unseen Line", scheduled_ride_s=1800.0)
+    assert dist.observed_count == 0
+    assert abs(dist.quantile(0.5) - 1800.0) < P.ride_delay_spread_s
