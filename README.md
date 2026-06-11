@@ -276,7 +276,9 @@ uvicorn backend.app:app --port 8090
 | `POST` | `/ingest/owntracks` | OwnTracks front door — always returns 200 |
 | `GET` | `/api/health/ingestion` | Health and backlog status |
 | `GET` | `/api/trips?limit=` | Trip list, newest first (default 50) |
+| `GET` | `/api/trips?reviewed=false` | Review queue — trips not yet confirmed |
 | `GET` | `/api/trips/{trip_id}` | Trip detail: segments + GPS points |
+| `POST` | `/api/labels` | Record a label event (see Labels API below) |
 
 ### Environment variables
 
@@ -350,6 +352,56 @@ To import historical data from the legacy SQLite database:
 ```bash
 python -m scripts.migrate_legacy_raw data/commute_tracker.db data_v2
 ```
+
+### Frontend
+
+A SvelteKit SPA lives in `frontend/`. It serves the trips list and a map workbench for reviewing and labeling trips. In production the compiled output is baked into the Docker image and served by FastAPI at `/`; Vite proxies `/api` and `/ingest` to the backend during development so no CORS config is needed.
+
+**Dev loop:**
+
+```bash
+# Terminal 1 — backend
+uvicorn backend.app:app --port 8090
+
+# Terminal 2 — frontend (Vite proxies /api and /ingest to :8090)
+cd frontend && npm run dev
+```
+
+**Quality checks:**
+
+```bash
+cd frontend
+npm run check        # svelte-check type checking
+npm test             # vitest unit tests
+npm run e2e          # Playwright end-to-end smoke
+npm run build        # production build (output in frontend/build/)
+```
+
+### Labels API
+
+Label events are primitive data — archived like raw GPS points and replayed on every `rebuild` — so labels always take supremacy over heuristics and train-match results without any special logic.
+
+#### `POST /api/labels`
+
+Record a label event for a trip or segment. Body fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trip_id` | string | Target trip |
+| `segment_mode` | string \| null | Override the inferred mode for a segment (`walk`, `train`, `bus`, `car`, …) |
+| `train_match` | object \| null | Override the matched train (pass `null` to clear a false positive) |
+| `trip_flag` | string \| null | Flag the trip for follow-up (`"skip"`, `"uncertain"`, …) |
+| `trip_reviewed` | bool | Mark the trip as reviewed (removes it from the review queue) |
+
+At least one of the override fields must be present. Multiple fields may be set in a single call.
+
+#### Review queue
+
+```
+GET /api/trips?reviewed=false
+```
+
+Returns trips that have not yet been confirmed, newest first. Use this to work through unreviewed trips in the labeling workbench.
 
 ## Development
 
