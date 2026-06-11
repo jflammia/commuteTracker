@@ -12,6 +12,9 @@ service day).
 
 Sign convention: delta_s = observed boarding (local s) − scheduled departure;
 positive = boarded after the scheduled time.
+
+Tie-breaks are explicit ((|delta|, trip_id) for trips; (source, stop_id) scan
+order for stops) so results are independent of database physical row order.
 """
 
 from dataclasses import dataclass
@@ -44,11 +47,17 @@ class TrainMatch:
 
 
 def _nearest_stop(stops: list[tuple], lat: float, lon: float):
-    """stops rows: (source, stop_id, stop_name, stop_lat, stop_lon)."""
-    best, best_d = None, STOP_RADIUS_M
+    """Return the nearest stop within ≤500 m; equidistant ties resolve to the
+    lowest (source, stop_id) among rows arriving ORDER BY source, stop_id.
+
+    stops rows: (source, stop_id, stop_name, stop_lat, stop_lon).
+    Initialise best_d just above STOP_RADIUS_M so an exact-500 m stop is
+    accepted, and use strict < so first-encountered wins on equal distance.
+    """
+    best, best_d = None, STOP_RADIUS_M + 1e-9
     for row in stops:
         d = haversine_m(lat, lon, row[3], row[4])
-        if d <= best_d:
+        if d < best_d:
             best, best_d = row, d
     return best
 
@@ -67,6 +76,7 @@ def _service_day_candidates(ts: float) -> list[tuple[str, int]]:
 def match_trip(con: duckdb.DuckDBPyConnection, closed: TripClosed) -> list["TrainMatch"]:
     stops = con.execute(
         "SELECT source, stop_id, stop_name, stop_lat, stop_lon FROM gtfs_stops"
+        " ORDER BY source, stop_id"
     ).fetchall()
     if not stops:
         return []
@@ -83,7 +93,7 @@ def match_trip(con: duckdb.DuckDBPyConnection, closed: TripClosed) -> list["Trai
         if board[0] != alight[0]:
             continue  # endpoints resolved to different agencies' stops
         source = board[0]
-        best = None
+        best, best_key = None, None
         for service_date, local_s in _service_day_candidates(start.ts):
             active = active_service_ids(con, source, service_date)
             if not active:
@@ -97,7 +107,8 @@ def match_trip(con: duckdb.DuckDBPyConnection, closed: TripClosed) -> list["Trai
                 "JOIN gtfs_trips t ON t.source = st1.source AND t.trip_id = st1.trip_id "
                 "JOIN gtfs_routes r ON r.source = t.source AND r.route_id = t.route_id "
                 "WHERE st1.source = ? AND st1.stop_id = ? AND st2.stop_id = ? "
-                "  AND st1.stop_sequence < st2.stop_sequence",
+                "  AND st1.stop_sequence < st2.stop_sequence "
+                "ORDER BY st1.departure_s, t.trip_id",
                 [source, board[1], alight[1]],
             ).fetchall()
             for gtfs_trip_id, service_id, headsign, route_name, dep_s in rows:
@@ -106,7 +117,9 @@ def match_trip(con: duckdb.DuckDBPyConnection, closed: TripClosed) -> list["Trai
                 delta = local_s - dep_s
                 if abs(delta) > DEP_TOLERANCE_S:
                     continue
-                if best is None or abs(delta) < abs(best.delta_s):
+                key = (abs(delta), gtfs_trip_id)
+                if best is None or key < best_key:
+                    best_key = key
                     best = TrainMatch(
                         trip_id=closed.trip.trip_id,
                         seg_index=seg.seg_index,

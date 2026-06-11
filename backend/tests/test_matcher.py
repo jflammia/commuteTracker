@@ -110,3 +110,44 @@ def test_walk_segments_never_matched(settings):
     matches = match_trip(store.con, closed)
     walk_indexes = {s.seg_index for s in closed.segments if s.mode != "vehicle"}
     assert all(m.seg_index not in walk_indexes for m in matches)
+
+
+def test_equal_delta_tie_breaks_deterministically(settings):
+    """Two candidates with equal |delta|=60s must resolve to the same trip across
+    DELETE+INSERT re-parses that scramble DuckDB physical row order."""
+    closed = _closed_commute()
+    seg, start, end = _vehicle_segment_endpoints(closed)
+    stops = [("S1", "Alpha", start.lat, start.lon), ("S2", "Beta", end.lat, end.lon)]
+    trips = [
+        (
+            "T_LATE",
+            "WK",
+            "Beta-bound",
+            [("S1", _hms(start.ts + 60)), ("S2", _hms(end.ts + 60))],
+        ),
+        (
+            "T_EARLY",
+            "WK",
+            "Beta-bound",
+            [("S1", _hms(start.ts - 60)), ("S2", _hms(end.ts - 60))],
+        ),
+    ]
+    z = build_gtfs_zip(stops, trips)
+    RawStore(settings.data_dir).append(
+        "gtfs_path",
+        {
+            "received_at": "2026-06-09T05:00:00+00:00",
+            "payload": {"url": "u", "status": 200, "b64": base64.b64encode(z).decode()},
+        },
+    )
+    store = DerivedStore(settings)
+    snap = latest_snapshot(settings, "gtfs_path")
+    winners = []
+    for _ in range(3):
+        # re-parse each round: DELETE+INSERT scrambles duckdb physical row order
+        parse_gtfs(store.con, "gtfs_path", snap, fetched_at="x")
+        winners.append(match_trip(store.con, closed)[0].gtfs_trip_id)
+    # Stability across physical reorderings is the load-bearing assertion.
+    assert winners == [winners[0]] * 3
+    # |delta| tie (both 60 s) → lexicographically smaller trip_id wins.
+    assert winners[0] == "T_EARLY"
