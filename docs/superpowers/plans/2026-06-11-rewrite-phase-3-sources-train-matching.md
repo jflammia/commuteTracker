@@ -58,6 +58,11 @@ README.md           # modify: sources config, known-good public URLs
 - **Rail filter**: `route_type IN (1, 2)` (1 = subway/PATH, 2 = rail/NJT).
 - **Matcher thresholds** (module constants): `STOP_RADIUS_M = 500.0`, `DEP_TOLERANCE_S = 900.0`.
 - **Schedule tables are truncated with everything else** on rebuild and re-parsed from the archived snapshot — one disposability rule, no special cases.
+- **Latest-snapshot matching is a deliberate Phase-3 simplification.** Rebuild
+  re-parses only the NEWEST archived GTFS snapshot, so historical trips match
+  against today's schedule — the spec's version-in-effect matching (each trip
+  vs the schedule active on its date) is deferred; all snapshots are archived,
+  so it can be implemented retroactively without data loss.
 
 ---
 
