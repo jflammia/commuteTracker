@@ -67,6 +67,46 @@ def test_rebuild_skips_non_location(settings):
     assert counts.get("trips", 0) == 0
 
 
+def test_rebuild_replays_labels(settings):
+    _ingest_synthetic_day(settings)
+    engine, store, counts = rebuild(settings)
+    trip_id = store.list_trips()[0]["trip_id"]
+    seg_index = next(
+        s["seg_index"] for s in store.get_trip(trip_id)["segments"] if s["mode"] == "vehicle"
+    )
+    # label arrives as a primitive event (as the API would write it)
+    RawStore(settings.data_dir).append(
+        "labels",
+        {
+            "received_at": "2026-06-10T15:00:00+00:00",
+            "payload": {
+                "type": "segment_mode",
+                "trip_id": trip_id,
+                "seg_index": seg_index,
+                "value": "train",
+            },
+        },
+    )
+    engine, store, counts = rebuild(settings)  # derived wiped + rebuilt
+    assert counts["labels_applied"] == 1
+    seg = next(s for s in store.get_trip(trip_id)["segments"] if s["seg_index"] == seg_index)
+    assert seg["mode_effective"] == "train"
+
+
+def test_rebuild_skips_labels_for_vanished_trips(settings):
+    _ingest_synthetic_day(settings)
+    RawStore(settings.data_dir).append(
+        "labels",
+        {
+            "received_at": "2026-06-10T15:00:00+00:00",
+            "payload": {"type": "trip_flag", "trip_id": "t999999", "value": "ok"},
+        },
+    )
+    engine, store, counts = rebuild(settings)
+    assert counts["labels_skipped"] == 1
+    assert counts.get("labels_applied", 0) == 0
+
+
 def test_rebuild_parses_schedule_and_matches_trains(settings):
     import base64
     from datetime import datetime
