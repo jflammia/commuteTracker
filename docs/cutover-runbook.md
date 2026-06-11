@@ -19,14 +19,30 @@ AFTER:  OwnTracks → POST /pub → commute-backend (rewrite, :8090) → raw JSO
 ```
 
 ## Step 0 — prerequisites
-- The production host (currently **aviato**, offline at cutover time) must be
-  reachable, OR the stack runs on whichever host Komodo schedules it to.
-- The legacy production `commute_tracker.db` must be accessible for the data
-  migration (it is the only copy of historical GPS — **not** mirrored to the
-  arallon SeaweedFS, verified 2026-06-11).
-- A SeaweedFS S3 bucket for the archive (the legacy `commute-tracker-raw`
-  bucket does **not** exist on arallon yet — create one, e.g. `commute-tracker`,
-  and an S3 access key/secret on the SeaweedFS S3 gateway at `arallon:8333`).
+
+### Where the legacy data actually lives (traced 2026-06-11)
+The legacy receiver writes everything to its `/data` mount: the SQLite
+`commute_tracker.db` (source of truth, synchronous write) plus `raw/*.jsonl`.
+That data is the **only copy of historical GPS** and is what the migration
+reads. It is **not** on the arallon storage server — exhaustively verified via
+`hlc truenas` and arallon's Docker API:
+
+- arallon (TrueNAS Scale) has **no** commute dataset, NFS share, SMB share, or
+  SeaweedFS S3 bucket (buckets: cars/git/ha-backups/hestia/registry-cache).
+- arallon's Docker (the one Komodo reaches via its `docker-socket-proxy`) runs
+  7 containers — traefik, seaweedfs(+filestash), promtail, beszel-agent,
+  docker-socket-proxy, mbuffer-receiver — **none is commute-tracker**, and there
+  are **zero** Docker named volumes.
+
+So the production `commute-receiver` runs elsewhere — most likely **aviato**
+(192.168.10.79, offline at cutover time) — with its `/data` in a local Docker
+volume/bind on that host. **The migration requires that host online** (or a
+copy of its `commute_tracker.db`).
+
+### Archive target
+- The new backend archives to an S3 bucket. arallon's SeaweedFS S3 gateway
+  (`arallon:8333`) is a good target — create a bucket (e.g. `commute-tracker`)
+  and an access key/secret there.
 
 ## Step 1 — deploy the backend alongside legacy (passthrough phase)
 Run the new backend with `CT_PASSTHROUGH_URL` pointed at the still-running
