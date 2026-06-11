@@ -67,3 +67,25 @@ def test_store_failure_logs_context(client, monkeypatch, caplog):
     assert resp.status_code == 200
     assert "data may be lost" in caplog.text
     assert "location" in caplog.text  # body prefix included
+
+
+def test_pub_alias_accepts_owntracks_and_returns_200(client, settings):
+    body = {"_type": "location", "tst": 1781100000, "lat": 40.7, "lon": -74.2}
+    resp = client.post("/pub", json=body, headers={"X-Limit-U": "justin", "X-Limit-D": "iphone"})
+    assert resp.status_code == 200
+    assert resp.json() == []
+    # same raw stream as /ingest/owntracks — a point arrived
+    import json as _json
+
+    files = list((settings.data_dir / "raw" / "owntracks").glob("*.jsonl"))
+    assert len(files) == 1
+    rec = _json.loads(files[0].read_text().splitlines()[0])
+    assert rec["payload"] == body
+
+
+def test_pub_and_ingest_paths_share_one_stream(client, settings):
+    client.post("/pub", json={"_type": "location", "tst": 1, "lat": 1.0, "lon": 2.0})
+    client.post("/ingest/owntracks", json={"_type": "location", "tst": 2, "lat": 1.0, "lon": 2.0})
+    files = list((settings.data_dir / "raw" / "owntracks").glob("*.jsonl"))
+    assert len(files) == 1
+    assert len(files[0].read_text().splitlines()) == 2

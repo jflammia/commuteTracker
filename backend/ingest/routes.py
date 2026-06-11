@@ -53,4 +53,9 @@ def make_ingest_router() -> APIRouter:
             )
         return JSONResponse(content=[], status_code=200)
 
+    # Drop-in alias: OwnTracks is still pointed at /pub on existing deployments.
+    # Binding the same handler to /pub means no OwnTracks reconfiguration is
+    # needed when cutting over from the legacy backend.
+    router.post("/pub")(ingest_owntracks)
+
     return router
