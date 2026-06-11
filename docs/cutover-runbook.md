@@ -10,39 +10,74 @@ The cutover is designed to be **non-breaking**: the new backend exposes the
 OwnTracks ingest at BOTH `/ingest/owntracks` and the legacy `/pub` path, so the
 phone needs **no reconfiguration**.
 
+## ⚠️ Blocking cutover gaps (resolve before deploying)
+
+The production trace (2026-06-11, via `hlc komodo` + the stack repo) surfaced
+two mismatches between this rewrite and the live deployment. **Both must be
+closed before the cutover can actually take effect — neither is cosmetic.**
+
+1. **Registry mismatch.** `release.yml` publishes the rewrite image to **GHCR**
+   (`ghcr.io/jflammia/commutetracker`), but production pulls from the **Forgejo**
+   registry: `stacks/bighead/commutetracker/compose.yaml` references
+   `git.blueshift.xyz/justin/commutetracker:latest`. A GHCR-only build never
+   reaches prod. **Fix:** either (a) add a `.forgejo/workflows` build that
+   publishes `Dockerfile.backend` to `git.blueshift.xyz/justin/commutetracker`,
+   or (b) point the Komodo stack at the GHCR image. Until one is done, merging a
+   release does **not** change what bighead runs.
+
+2. **`/pub` auth mismatch.** The legacy receiver enforces **HTTP Basic Auth** on
+   `/pub` (`OWNTRACKS_USERNAME`/`OWNTRACKS_PASSWORD`; bad/missing creds → 200 +
+   skip DB write). The rewrite's `/pub` alias performs **no auth** — it would
+   accept and archive unauthenticated posts. OwnTracks is already configured to
+   send those Basic Auth creds, so the phone works either way, but dropping the
+   check widens the ingest surface. **Fix:** port the Basic Auth gate onto the
+   rewrite's `/pub` (and `/ingest/owntracks`) before exposing it publicly.
+
 ## Topology before / after
 
 ```
-BEFORE: OwnTracks → POST /pub → commute-receiver (legacy, :8080) → SQLite → Streamlit dashboard (:8501)
-AFTER:  OwnTracks → POST /pub → commute-backend (rewrite, :8090) → raw JSONL → S3 archive (SeaweedFS)
-                                                                  → trips/optimizer + SvelteKit UI at /
+BEFORE: OwnTracks → Traefik (bighead) → POST /pub [Basic Auth] → commute-receiver (legacy, host :8083→ctr :8080)
+                                                                → SQLite /data/commute_tracker.db (bighead local disk)
+                                                                → Streamlit dashboard (:8501)
+AFTER:  OwnTracks → Traefik (bighead) → POST /pub [Basic Auth] → commute-backend (rewrite, :8090) → raw JSONL
+                                                                → S3 archive (SeaweedFS) + trips/optimizer + SvelteKit UI at /
 ```
 
 ## Step 0 — prerequisites
 
-### Where the legacy data actually lives (traced 2026-06-11)
-The legacy receiver writes everything to its `/data` mount: the SQLite
-`commute_tracker.db` (source of truth, synchronous write) plus `raw/*.jsonl`.
-That data is the **only copy of historical GPS** and is what the migration
-reads. It is **not** on the arallon storage server — exhaustively verified via
-`hlc truenas` and arallon's Docker API:
+### Where the legacy data actually lives (authoritatively traced 2026-06-11)
+The legacy stack runs on the Komodo server **bighead** (podman), as containers
+`commute-receiver` + `commute-dashboard` — **UP** and Komodo-managed at cutover
+time. Deployment is Komodo GitOps from `git.blueshift.xyz/justin/blueshift-stacks`
+→ `stacks/bighead/commutetracker/compose.yaml`.
+
+The receiver writes everything to its `/data` mount, which is a **bind mount to
+bighead's local disk** (`/var/lib/commutetracker/data:/data:Z`): the SQLite
+`commute_tracker.db` (source of truth, `DATABASE_URL=sqlite:////data/commute_tracker.db`,
+synchronous write) plus `raw/*.jsonl` and derived Parquet. **S3 sync is NOT
+configured**, so that host directory is the **only copy of historical GPS** and
+is what the migration reads. Because bighead is up and Komodo-reachable, the
+migration source is **online now** — read `commute_tracker.db` via Komodo /
+bighead; no host needs to be brought back up.
+
+It is **not** on the arallon storage server (an earlier guess) — exhaustively
+verified via `hlc truenas` and arallon's Docker API:
 
 - arallon (TrueNAS Scale) has **no** commute dataset, NFS share, SMB share, or
   SeaweedFS S3 bucket (buckets: cars/git/ha-backups/hestia/registry-cache).
-- arallon's Docker (the one Komodo reaches via its `docker-socket-proxy`) runs
-  7 containers — traefik, seaweedfs(+filestash), promtail, beszel-agent,
-  docker-socket-proxy, mbuffer-receiver — **none is commute-tracker**, and there
-  are **zero** Docker named volumes.
+- arallon's Docker runs 7 containers — traefik, seaweedfs(+filestash), promtail,
+  beszel-agent, docker-socket-proxy, mbuffer-receiver — **none is
+  commute-tracker**, and there are **zero** Docker named volumes.
 
-So the production `commute-receiver` runs elsewhere — most likely **aviato**
-(192.168.10.79, offline at cutover time) — with its `/data` in a local Docker
-volume/bind on that host. **The migration requires that host online** (or a
-copy of its `commute_tracker.db`).
+It is also **not** on aviato (a still-earlier guess from an SSH timeout; aviato
+and bighead are separate Komodo servers — the timeout was not evidence of where
+the stack runs).
 
 ### Archive target
-- The new backend archives to an S3 bucket. arallon's SeaweedFS S3 gateway
-  (`arallon:8333`) is a good target — create a bucket (e.g. `commute-tracker`)
-  and an access key/secret there.
+- The new backend archives to an S3 bucket; prod currently configures **no** S3,
+  so this is net-new. arallon's SeaweedFS S3 gateway (`arallon:8333`) is a good
+  target — create a bucket (e.g. `commute-tracker`) and an access key/secret
+  there. (arallon has no commute bucket today; you are creating the first one.)
 
 ## Step 1 — deploy the backend alongside legacy (passthrough phase)
 Run the new backend with `CT_PASSTHROUGH_URL` pointed at the still-running
@@ -51,10 +86,16 @@ backend env (Komodo stack / compose):
 
 ```yaml
   commute-backend:
-    image: ghcr.io/jflammia/commutetracker:latest   # now the rewrite backend
+    # NOTE: prod's Komodo stack pulls git.blueshift.xyz/justin/commutetracker —
+    # see blocking gap #1. Use whichever registry you resolved that gap toward.
+    image: git.blueshift.xyz/justin/commutetracker:latest   # rewrite backend
     ports: ["8090:8090"]
     environment:
       CT_DATA_DIR: /data
+      # Basic Auth on /pub — match legacy (blocking gap #2); OwnTracks already
+      # sends these creds. Requires the rewrite's /pub to enforce them.
+      OWNTRACKS_USERNAME: "<from 1Password / legacy stack secret>"
+      OWNTRACKS_PASSWORD: "<from 1Password / legacy stack secret>"
       # archive → SeaweedFS S3 gateway
       CT_S3_BUCKET: commute-tracker
       CT_S3_PREFIX: commute-tracker
@@ -97,7 +138,10 @@ Verify: `GET /api/health/ingestion` shows fresh `last_event_at`; the SvelteKit
 UI loads at `/`; `GET /api/health/sources` shows PATH feeds archiving.
 
 ## Step 2 — migrate historical data
-With the legacy `commute_tracker.db` copied to the host (or mounted):
+The source DB lives on bighead at `/var/lib/commutetracker/data/commute_tracker.db`
+and bighead is up + Komodo-managed, so it is reachable now — copy it off via
+Komodo / bighead (no host needs to be revived). With that
+`commute_tracker.db` copied to the backend host (or mounted):
 
 ```bash
 # the data dir must contain no prior raw files except today's live file
