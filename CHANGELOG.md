@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.11](https://github.com/jflammia/commuteTracker/compare/v0.0.10...v0.0.11) (2026-06-11)
+
+
+### Features
+
+* **backend:** deterministic trip engine with live detection and replay ([#21](https://github.com/jflammia/commuteTracker/issues/21)) ([ea44ad9](https://github.com/jflammia/commuteTracker/commit/ea44ad909d1e1f57557cc8de61d3aec9a30c6ca1))
+* **backend:** durable ingestion and s3 parquet archive foundation ([#19](https://github.com/jflammia/commuteTracker/issues/19)) ([57af05d](https://github.com/jflammia/commuteTracker/commit/57af05dbe8ff6625626542c24820a6ef7ef5869b))
+* **backend:** pluggable data sources and gtfs train matching ([#22](https://github.com/jflammia/commuteTracker/issues/22)) ([ccea9b5](https://github.com/jflammia/commuteTracker/commit/ccea9b58510bb3df18c49e986aa389a88e7876e2))
+* **frontend:** labeling workbench, sveltekit spa, and njt token auth ([#23](https://github.com/jflammia/commuteTracker/issues/23)) ([03a1327](https://github.com/jflammia/commuteTracker/commit/03a13272cf857e4a3ee1233a9dfdf3df7877acaa))
+* **optimizer:** rail-aware itinerary optimizer with today and optimizer views ([#24](https://github.com/jflammia/commuteTracker/issues/24)) ([9195b78](https://github.com/jflammia/commuteTracker/commit/9195b7810b1799721e0e300f13adb36f47b4df88))
+
+
+### Documentation
+
+* add njt token-auth source task validated against live api ([fbb04bd](https://github.com/jflammia/commuteTracker/commit/fbb04bd03e7eb09709702f750e85798d633bf67a))
+* phase 2 implementation plan (trip engine) ([baeaf3f](https://github.com/jflammia/commuteTracker/commit/baeaf3fd02f873ef6b5b33c26b444a7c971b400e))
+* phase 3 implementation plan (sources + train matching) ([6e7d429](https://github.com/jflammia/commuteTracker/commit/6e7d429d55ffc44d27362fca3347636a1d03441b))
+* phase 4 implementation plan (labeling + frontend workbench) ([0192877](https://github.com/jflammia/commuteTracker/commit/0192877074eda01ee7a16eec4002c979e91f88bb))
+* phase 5 implementation plan (rail-aware optimizer) ([1ebf89c](https://github.com/jflammia/commuteTracker/commit/1ebf89c78bbceb9adcdd0485243c22d2b77bf33e))
+
 ## [0.0.10](https://github.com/jflammia/commuteTracker/compare/v0.0.9...v0.0.10) (2026-04-07)
 
 
