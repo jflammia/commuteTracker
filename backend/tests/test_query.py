@@ -45,3 +45,47 @@ def test_payload_is_queryable_json(settings):
 def test_empty_system_returns_empty_relation(settings):
     q = EventQuery(settings)
     assert q.events("owntracks").pl().height == 0
+
+
+def test_archive_only(settings):
+    store = RawStore(settings.data_dir)
+    store.append(
+        "owntracks",
+        {
+            "received_at": "2026-06-09T01:00:00+00:00",
+            "user": "j",
+            "device": "d",
+            "payload": {"tst": 1},
+        },
+    )
+    Archiver(settings).run(today="2026-06-10")
+    df = EventQuery(settings).events("owntracks").pl()
+    assert df.height == 1
+    assert df["source"].to_list() == ["archive"]
+
+
+def test_raw_only(settings):
+    store = RawStore(settings.data_dir)
+    store.append(
+        "owntracks",
+        {
+            "received_at": "2026-06-10T01:00:00+00:00",
+            "user": "j",
+            "device": "d",
+            "payload": {"tst": 1},
+        },
+    )
+    df = EventQuery(settings).events("owntracks").pl()
+    assert df.height == 1
+    assert df["source"].to_list() == ["raw"]
+
+
+def test_sql_names_do_not_leak_between_calls(settings):
+    _seed(settings)
+    q = EventQuery(settings)
+    rel = q.events("owntracks")
+    q.sql("SELECT count(*) FROM rel", rel=rel).fetchall()
+    import pytest as _pytest
+
+    with _pytest.raises(Exception):
+        q.sql("SELECT count(*) FROM rel").fetchall()

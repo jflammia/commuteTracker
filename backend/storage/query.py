@@ -11,6 +11,14 @@ _RAW_COLUMNS = (
 
 
 class EventQuery:
+    """Query layer over the Parquet archive and raw JSONL tail for a single stream.
+
+    Intended to be created once per process or request scope.  Each instance
+    owns a private in-memory DuckDB connection whose lifetime matches the
+    lifetime of its relations — do not share instances across threads or
+    requests.
+    """
+
     def __init__(self, settings: Settings):
         self._settings = settings
         self._con = duckdb.connect()
@@ -20,6 +28,9 @@ class EventQuery:
 
         The ``payload`` column is typed JSON so callers can use ``->>'$.key'``
         extraction directly on the relation.
+
+        ``stream`` comes from internal callers (STREAMS) only — not user input;
+        validate before ever exposing externally.
         """
         archive_dir = self._settings.data_dir / "archive" / stream
         raw_dir = self._settings.data_dir / "raw" / stream
@@ -55,7 +66,19 @@ class EventQuery:
         return self._con.sql(" UNION ALL ".join(parts))
 
     def sql(self, query: str, **relations: duckdb.DuckDBPyRelation) -> duckdb.DuckDBPyRelation:
-        """Execute a SQL query, optionally binding named relations into scope."""
+        """Execute a SQL query, optionally binding named relations into scope.
+
+        Each kwarg name is registered on the connection for the duration of this
+        call only.  Names are always unregistered in a ``finally`` block so they
+        cannot leak into subsequent calls.  Because DuckDB relations are lazily
+        evaluated, the result is materialized via ``.execute()`` before the names
+        are removed — the returned relation is fully independent of the registered
+        names and safe to consume after this method returns.
+        """
         for name, rel in relations.items():
             self._con.register(name, rel)
-        return self._con.sql(query)
+        try:
+            return self._con.sql(query).execute()
+        finally:
+            for name in relations:
+                self._con.unregister(name)
