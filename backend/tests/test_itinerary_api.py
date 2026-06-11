@@ -37,17 +37,25 @@ def test_trip_detail_includes_itinerary_with_train(settings):
     )
     RawStore(settings.data_dir).append(
         "gtfs_path",
-        {"received_at": "2026-06-09T05:00:00+00:00",
-         "payload": {"url": "u", "status": 200,
-                     "b64": base64.b64encode(z).decode()}},
+        {
+            "received_at": "2026-06-09T05:00:00+00:00",
+            "payload": {"url": "u", "status": 200, "b64": base64.b64encode(z).decode()},
+        },
     )
 
     app = create_app(settings)
     with TestClient(app) as c:
         for pt in pts:
-            c.post("/ingest/owntracks", json={"_type": "location", "tst": pt.ts,
-                                              "lat": pt.lat, "lon": pt.lon,
-                                              "acc": pt.accuracy_m})
+            c.post(
+                "/ingest/owntracks",
+                json={
+                    "_type": "location",
+                    "tst": pt.ts,
+                    "lat": pt.lat,
+                    "lon": pt.lon,
+                    "acc": pt.accuracy_m,
+                },
+            )
         trip_id = c.get("/api/trips").json()[0]["trip_id"]
         detail = c.get(f"/api/trips/{trip_id}").json()
 
