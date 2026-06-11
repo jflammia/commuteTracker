@@ -74,6 +74,21 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend for e2e server
+        run: pip install -e ".[dev]"
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: E2E smoke
+        run: npm run e2e
+        working-directory: frontend
+
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
