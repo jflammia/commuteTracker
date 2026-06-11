@@ -29,6 +29,8 @@ dev = [
     "pytest",
     "ruff",
     "scikit-learn>=1.4",
+    "moto[s3]>=5.0",
+    "httpx>=0.27",
 ]
 
 [build-system]
@@ -39,4 +41,4 @@ build-backend = "setuptools.build_meta"
 line-length = 100
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "backend/tests"]
