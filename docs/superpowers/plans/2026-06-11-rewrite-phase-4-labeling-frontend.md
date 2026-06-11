@@ -1772,3 +1772,287 @@ git commit -m "docs: frontend dev loop and labels api"
    `GET /` returns the SPA index, `GET /api/trips` returns `[]`, ingest a
    synthetic commute, `GET /trips/<id>` deep link returns the SPA (200).
 4. `gh run list` green after push (including the new frontend CI job).
+
+---
+
+### Task 11 (added after live API validation): NJT token-auth source strategy
+
+**Validated against the live API 2026-06-11:** NJ Transit's RailData API has no
+authenticated-URL form. The real shape (probed with the user's credentials):
+
+- `POST https://raildata.njtransit.com/api/GTFSRT/getToken` — multipart form
+  fields `username`, `password` → `{"UserToken": "..."}` on success,
+  `{"errorMessage": "..."}` with HTTP 500 on failure (observed:
+  `"Missing user account."` until the portal provisions API access).
+- Data endpoints (`POST .../api/GTFSRT/getGTFS|getTripUpdates|getAlerts`) —
+  multipart form field `token`; missing/invalid token → HTTP 500
+  `{"errorMessage": "Missing token."}`.
+- Tokens are rate-limited per day → the token MUST be cached in memory AND
+  persisted to disk (`<data_dir>/njt_token.txt`) so restarts don't burn quota.
+
+**Files:**
+- Modify: `backend/config.py` (replace the three `njt_*_url` settings with
+  `njt_username`/`njt_password` + `njt_api_base`), `backend/tests/test_config.py`
+- Create: `backend/sources/njt.py`
+- Modify: `backend/sources/framework.py`, `backend/sources/poller.py`,
+  `backend/health/sources.py` (registry covers NJT specs)
+- Test: `backend/tests/test_sources_njt.py`
+- Modify: `README.md` (NJT section: username/password env vars, provisioning note)
+
+**Settings changes** (remove `njt_gtfs_url`, `njt_rt_tripupdates_url`,
+`njt_rt_alerts_url` — they shipped in Phase 3 but were never usable; update
+`test_config.py` accordingly):
+
+```python
+    njt_username: str | None = None        # CT_NJT_USERNAME — unset = NJT disabled
+    njt_password: str | None = None        # CT_NJT_PASSWORD
+    njt_api_base: str = "https://raildata.njtransit.com/api/GTFSRT"  # CT_NJT_API_BASE (tests override)
+```
+
+**`backend/sources/njt.py`** — complete implementation:
+
+```python
+"""NJ Transit RailData GTFS-RT source: token-exchange auth.
+
+POST getToken (multipart username/password) -> {"UserToken": ...}; data
+endpoints take a multipart `token` field. Tokens are daily-rate-limited, so
+the manager caches in memory AND persists to <data_dir>/njt_token.txt; it
+re-exchanges only when an endpoint reports a token problem."""
+
+import base64
+import hashlib
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+
+import httpx
+
+from backend.storage.raw import RawStore
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class NjtSpec:
+    name: str          # raw stream name, e.g. "gtfs_njt"
+    endpoint: str      # e.g. "getGTFS"
+    interval_s: float
+
+
+class NjtTokenManager:
+    def __init__(self, api_base: str, username: str, password: str, data_dir: Path):
+        self._api_base = api_base.rstrip("/")
+        self._username = username
+        self._password = password
+        self._path = data_dir / "njt_token.txt"
+        self._token: str | None = (
+            self._path.read_text().strip() if self._path.exists() else None
+        ) or None
+
+    async def token(self, client: httpx.AsyncClient) -> str | None:
+        if self._token:
+            return self._token
+        return await self.refresh(client)
+
+    async def refresh(self, client: httpx.AsyncClient) -> str | None:
+        try:
+            resp = await client.post(
+                f"{self._api_base}/getToken",
+                files={"username": (None, self._username),
+                       "password": (None, self._password)},
+                timeout=30.0,
+            )
+            data = resp.json()
+            token = data.get("UserToken")
+            if token:
+                self._token = token
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                self._path.write_text(token)
+                return token
+            log.warning("njt getToken failed: %s", data.get("errorMessage"))
+        except Exception:
+            log.exception("njt getToken request failed")
+        return None
+
+
+def njt_specs_from_settings(settings) -> list[NjtSpec]:
+    if not (settings.njt_username and settings.njt_password):
+        return []
+    return [
+        NjtSpec(name="gtfs_njt", endpoint="getGTFS",
+                interval_s=settings.gtfs_refresh_interval_s),
+        NjtSpec(name="rt_njt_trips", endpoint="getTripUpdates",
+                interval_s=settings.source_poll_interval_s),
+        NjtSpec(name="rt_njt_alerts", endpoint="getAlerts",
+                interval_s=settings.source_poll_interval_s),
+    ]
+
+
+def _is_token_error(resp: httpx.Response) -> bool:
+    if resp.status_code != 500:
+        return False
+    try:
+        msg = (resp.json().get("errorMessage") or "").lower()
+    except Exception:
+        return False
+    return "token" in msg
+
+
+async def fetch_njt_once(
+    client: httpx.AsyncClient, manager: NjtTokenManager, spec: NjtSpec,
+    store: RawStore, state: dict,
+) -> bool:
+    received_at = datetime.now(UTC).isoformat()
+    url = f"{manager._api_base}/{spec.endpoint}"
+    try:
+        token = await manager.token(client)
+        if token is None:
+            payload = {"url": url, "status": None, "error": "no njt token available"}
+            store.append(spec.name, {"received_at": received_at, "payload": payload})
+            return False
+        resp = await client.post(url, files={"token": (None, token)}, timeout=60.0)
+        if _is_token_error(resp):
+            token = await manager.refresh(client)
+            if token is not None:
+                resp = await client.post(url, files={"token": (None, token)},
+                                         timeout=60.0)
+        digest = hashlib.sha256(resp.content).hexdigest()
+        if resp.status_code == 200 and state.get(spec.name) == digest:
+            payload = {"url": url, "status": resp.status_code, "sha256": digest,
+                       "unchanged": True}
+        else:
+            payload = {"url": url, "status": resp.status_code, "sha256": digest,
+                       "b64": base64.b64encode(resp.content).decode("ascii")}
+            if resp.status_code == 200:
+                state[spec.name] = digest
+        ok = resp.status_code == 200
+    except Exception as exc:
+        payload = {"url": url, "status": None, "error": str(exc)}
+        ok = False
+    store.append(spec.name, {"received_at": received_at, "payload": payload})
+    return ok
+```
+
+**Poller wiring:** `poll_source` gains an njt variant (or a generic
+`poll(fetch_coro_factory, spec, store)` refactor — implementer's choice, keep
+both loop bodies crash-proof). `backend/app.py` lifespan builds ONE
+`NjtTokenManager` shared by all three NJT pollers (one token, one quota), only
+when `njt_specs_from_settings(settings)` is non-empty.
+
+**Health:** `sources_snapshot` must iterate BOTH `sources_from_settings` and
+`njt_specs_from_settings` (names/streams only — the freshness logic is
+identical).
+
+**Tests (`backend/tests/test_sources_njt.py`)** — MockTransport replicating
+the OBSERVED API shape:
+
+```python
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from backend.sources.njt import (NjtSpec, NjtTokenManager, fetch_njt_once,
+                                 njt_specs_from_settings)
+from backend.storage.raw import RawStore
+
+API = "https://test-njt.example/api/GTFSRT"
+
+
+def _transport(state):
+    """Replicates raildata.njtransit.com behavior observed 2026-06-11."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode(errors="replace")
+        if str(request.url).endswith("/getToken"):
+            state["token_calls"] = state.get("token_calls", 0) + 1
+            if "gooduser" in body:
+                return httpx.Response(200, json={"UserToken": f"tok{state['token_calls']}"})
+            return httpx.Response(500, json={"errorMessage": "Missing user account."})
+        # data endpoint: needs a CURRENT token
+        current = f"tok{state.get('token_calls', 0)}"
+        if current not in body or state.get("expire_all"):
+            return httpx.Response(500, json={"errorMessage": "Invalid token."})
+        return httpx.Response(200, content=state.get("body", b"protobytes"))
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.anyio
+async def test_token_exchange_then_fetch(tmp_path):
+    state = {}
+    client = httpx.AsyncClient(transport=_transport(state))
+    mgr = NjtTokenManager(API, "gooduser", "pw", tmp_path)
+    spec = NjtSpec(name="rt_njt_trips", endpoint="getTripUpdates", interval_s=60.0)
+    store = RawStore(tmp_path)
+    ok = await fetch_njt_once(client, mgr, spec, store, {})
+    assert ok is True
+    assert state["token_calls"] == 1
+    assert (tmp_path / "njt_token.txt").read_text() == "tok1"
+    rec = json.loads(next((tmp_path / "raw" / "rt_njt_trips").glob("*.jsonl"))
+                     .read_text().splitlines()[0])
+    assert rec["payload"]["status"] == 200
+
+
+@pytest.mark.anyio
+async def test_persisted_token_skips_exchange(tmp_path):
+    (tmp_path / "njt_token.txt").write_text("tok1")
+    state = {"token_calls": 1}  # pretend tok1 was issued earlier
+    client = httpx.AsyncClient(transport=_transport(state))
+    mgr = NjtTokenManager(API, "gooduser", "pw", tmp_path)
+    spec = NjtSpec(name="rt_njt_trips", endpoint="getTripUpdates", interval_s=60.0)
+    ok = await fetch_njt_once(client, mgr, spec, RawStore(tmp_path), {})
+    assert ok is True
+    assert state["token_calls"] == 1  # no new exchange
+
+
+@pytest.mark.anyio
+async def test_invalid_token_triggers_one_refresh(tmp_path):
+    (tmp_path / "njt_token.txt").write_text("stale")
+    state = {"token_calls": 1}  # current valid token is tok1, ours is "stale"
+    client = httpx.AsyncClient(transport=_transport(state))
+    mgr = NjtTokenManager(API, "gooduser", "pw", tmp_path)
+    spec = NjtSpec(name="rt_njt_trips", endpoint="getTripUpdates", interval_s=60.0)
+    ok = await fetch_njt_once(client, mgr, spec, RawStore(tmp_path), {})
+    assert ok is True
+    assert state["token_calls"] == 2  # exactly one refresh
+    assert (tmp_path / "njt_token.txt").read_text() == "tok2"
+
+
+@pytest.mark.anyio
+async def test_unprovisioned_account_archives_error(tmp_path):
+    state = {}
+    client = httpx.AsyncClient(transport=_transport(state))
+    mgr = NjtTokenManager(API, "newuser", "pw", tmp_path)  # not provisioned
+    spec = NjtSpec(name="gtfs_njt", endpoint="getGTFS", interval_s=86400.0)
+    ok = await fetch_njt_once(client, mgr, spec, RawStore(tmp_path), {})
+    assert ok is False
+    rec = json.loads(next((tmp_path / "raw" / "gtfs_njt").glob("*.jsonl"))
+                     .read_text().splitlines()[0])
+    assert rec["payload"]["status"] is None
+    assert "token" in rec["payload"]["error"]
+
+
+def test_specs_gated_on_credentials(tmp_path):
+    import dataclasses
+
+    from backend.config import Settings
+
+    base = Settings(data_dir=tmp_path, s3_bucket=None, s3_prefix="x",
+                    s3_region=None, passthrough_url=None, archive_hour_utc=6)
+    assert njt_specs_from_settings(base) == []
+    with_creds = dataclasses.replace(base, njt_username="u", njt_password="p")
+    assert [s.name for s in njt_specs_from_settings(with_creds)] == [
+        "gtfs_njt", "rt_njt_trips", "rt_njt_alerts"]
+```
+
+TDD as usual; full suite + ruff; commit:
+`feat: njt token-exchange source strategy with persisted token`
+
+**Production config note for README:** `CT_NJT_USERNAME` + `CT_NJT_PASSWORD`
+(from 1Password in the deployment); access requires the RailData API product
+to be provisioned on the NJT developer account — until then the source
+archives `no njt token available` errors and the health endpoint shows the
+failure, which is the designed degraded mode.
