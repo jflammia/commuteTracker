@@ -70,10 +70,11 @@ def decompose_trip(detail: dict) -> list[LegObservation]:
     for rail_i, pos in enumerate(rail_positions):
         # ground segments before this rail leg, after the previous rail leg
         ground = segments[cursor:pos]
-        dur = sum(s["duration_s"] for s in ground)
-        dist = sum(s["distance_m"] for s in ground)
-        kind = "access" if rail_i == 0 else "transfer"
-        _emit(kind, dur, dist)
+        if ground:
+            dur = sum(s["duration_s"] for s in ground)
+            dist = sum(s["distance_m"] for s in ground)
+            kind = "access" if rail_i == 0 else "transfer"
+            _emit(kind, dur, dist)
         rail = segments[pos]
         _emit(
             f"ride:{legs_meta[pos]['train']['source']}:{legs_meta[pos]['train']['route_name']}",

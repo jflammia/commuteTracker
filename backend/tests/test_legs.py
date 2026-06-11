@@ -218,6 +218,50 @@ def test_decompose_two_rail_legs_with_transfer():
     ]
 
 
+def test_decompose_skips_empty_access_when_trip_starts_on_rail():
+    trip = {
+        "trip": TRIP["trip"],
+        "segments": [
+            {
+                "seg_index": 0,
+                "mode_effective": "vehicle",
+                "duration_s": 2220.0,
+                "distance_m": 30000.0,
+                "start_ts": "2026-06-10T11:30:00+00:00",
+                "end_ts": "2026-06-10T12:07:00+00:00",
+            },
+            {
+                "seg_index": 1,
+                "mode_effective": "walk",
+                "duration_s": 480.0,
+                "distance_m": 640.0,
+                "start_ts": "2026-06-10T12:08:00+00:00",
+                "end_ts": "2026-06-10T12:16:00+00:00",
+            },
+        ],
+        "itinerary": [
+            {
+                "mode": "vehicle",
+                "train": {
+                    "seg_index": 0,
+                    "source": "gtfs_njt",
+                    "gtfs_trip_id": "NEC1",
+                    "route_name": "Northeast Corridor",
+                    "board_stop": "Metropark",
+                    "alight_stop": "New York Penn Station",
+                    "scheduled_dep_s": 27600,
+                    "delta_s": 0.0,
+                },
+            },
+            {"mode": "walk", "train": None},
+        ],
+    }
+    legs = decompose_trip(trip)
+    # no leading walk/drive → no access leg, just ride + egress
+    assert [lg.kind for lg in legs] == ["ride:gtfs_njt:Northeast Corridor", "egress"]
+    assert all(lg.duration_s > 0 for lg in legs)  # no zero-duration pollution
+
+
 def test_decompose_unmatched_rail_returns_no_legs():
     # a vehicle segment that the matcher could not attribute → not optimizable
     trip = {
