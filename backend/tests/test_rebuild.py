@@ -65,3 +65,47 @@ def test_rebuild_skips_non_location(settings):
     engine, dstore, counts = rebuild(settings)
     assert counts["skipped"] == 1
     assert counts.get("trips", 0) == 0
+
+
+def test_rebuild_parses_schedule_and_matches_trains(settings):
+    import base64
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from backend.engine.machine import TripEngine
+    from backend.engine.params import EngineParams
+    from backend.engine.types import TripClosed
+    from backend.tests.gtfs_fixture import build_gtfs_zip
+
+    # determine vehicle segment endpoints offline
+    pts, _, _ = commute()
+    eng = TripEngine(EngineParams(), geofences=[])
+    closed = []
+    for pt in pts:
+        closed.extend(e for e in eng.process(pt) if isinstance(e, TripClosed))
+    seg = next(s for s in closed[0].segments if s.mode == "vehicle")
+    start = next(p for p in closed[0].points if p.ts >= seg.start_ts)
+    end = max((p for p in closed[0].points if p.ts <= seg.end_ts), key=lambda p: p.ts)
+    ny = ZoneInfo("America/New_York")
+
+    def hms(epoch):
+        dt = datetime.fromtimestamp(epoch, ny)
+        return f"{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}"
+
+    z = build_gtfs_zip(
+        [("S1", "Alpha", start.lat, start.lon), ("S2", "Beta", end.lat, end.lon)],
+        [("T1", "WK", "Beta-bound", [("S1", hms(start.ts)), ("S2", hms(end.ts))])],
+    )
+    RawStore(settings.data_dir).append(
+        "gtfs_path",
+        {
+            "received_at": "2026-06-09T05:00:00+00:00",
+            "payload": {"url": "u", "status": 200, "b64": base64.b64encode(z).decode()},
+        },
+    )
+    _ingest_synthetic_day(settings)
+    engine, store, counts = rebuild(settings)
+    assert counts["trips"] == 1
+    assert counts["train_matches"] == 1
+    trip_id = store.list_trips()[0]["trip_id"]
+    assert store.matches_for_trip(trip_id)[0]["gtfs_trip_id"] == "T1"

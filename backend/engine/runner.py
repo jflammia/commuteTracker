@@ -9,6 +9,7 @@ from backend.engine.machine import TripEngine
 from backend.engine.rebuild import rebuild
 from backend.engine.types import Point, TripClosed
 from backend.storage.derived import DerivedStore
+from backend.transit.matcher import match_trip
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ class EngineRunner:
         for ev in self.engine.process(point):
             if isinstance(ev, TripClosed):
                 self.store.write_trip_closed(ev)
+                try:
+                    self.store.write_train_matches(match_trip(self.store.con, ev))
+                except Exception:
+                    log.exception("train matching failed — trip stored unmatched")
             else:
                 self.store.write_rejected(ev)
 

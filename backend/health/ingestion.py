@@ -9,7 +9,6 @@ import json
 from datetime import datetime
 
 from backend.config import Settings
-from backend.storage.archive import STREAMS
 from backend.storage.raw import RawStore
 
 
@@ -36,7 +35,7 @@ def ingestion_snapshot(settings: Settings, *, now_iso: str) -> dict:
     if last_event_at is not None:
         age = int((now - datetime.fromisoformat(last_event_at)).total_seconds())
 
-    backlog = sum(len(store.closed_day_files(s, today=today)) for s in STREAMS)
+    backlog = sum(len(store.closed_day_files(s, today=today)) for s in store.streams())
     return {
         "last_event_at": last_event_at,
         "age_seconds": age,

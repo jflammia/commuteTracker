@@ -23,8 +23,6 @@ from backend.storage.raw import RawStore
 
 log = logging.getLogger(__name__)
 
-STREAMS = ("owntracks", "owntracks_malformed")
-
 
 @dataclass(frozen=True)
 class ArchiveResult:
@@ -90,7 +88,7 @@ class Archiver:
     def run(self, today: str | None = None) -> list[ArchiveResult]:
         today = today or datetime.now(UTC).strftime("%Y-%m-%d")
         results = []
-        for stream in STREAMS:
+        for stream in self._store.streams():
             for raw_file in self._store.closed_day_files(stream, today=today):
                 results.append(self._archive_one(stream, raw_file))
         return results

@@ -291,6 +291,37 @@ uvicorn backend.app:app --port 8090
 | `CT_HOME_LAT` / `CT_HOME_LON` / `CT_HOME_RADIUS_M` | — | Home geofence for commute direction tagging (unset = no direction detection) |
 | `CT_WORK_LAT` / `CT_WORK_LON` / `CT_WORK_RADIUS_M` | — | Work geofence for commute direction tagging (unset = no direction detection) |
 
+### External data sources
+
+Transit schedule and real-time data are fetched by a background poller. Each source is enabled by configuring its URL; leaving it unset disables that source entirely. Every fetch is archived verbatim before parsing — data is re-parseable forever and no fetch is silently discarded.
+A GTFS snapshot fetched while the app is running is archived immediately but only re-parsed into the schedule tables at the next startup rebuild.
+
+#### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CT_PATH_GTFS_URL` | — | PATH GTFS static zip URL (unset = disabled) |
+| `CT_NJT_GTFS_URL` | — | NJ Transit GTFS static zip URL (unset = disabled) |
+| `CT_PATH_RT_URL` | — | PATH GTFS-RT feed URL (unset = disabled) |
+| `CT_NJT_RT_TRIPUPDATES_URL` | — | NJ Transit GTFS-RT TripUpdates URL (unset = disabled) |
+| `CT_NJT_RT_ALERTS_URL` | — | NJ Transit GTFS-RT Alerts URL (unset = disabled) |
+| `CT_SOURCE_POLL_INTERVAL_S` | `60` | How often to poll real-time feeds (seconds) |
+| `CT_GTFS_REFRESH_INTERVAL_S` | `86400` | How often to re-fetch GTFS static zips (seconds) |
+
+#### Known-good public URLs
+
+- **PATH GTFS static**: `http://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip`
+- **PATH GTFS-RT** (community-operated): `https://path.transitdata.nyc/gtfsrt`
+- **NJ Transit GTFS + GTFS-RT**: require a registered developer account at <https://developer.njtransit.com>. Supply your authenticated URLs once registered.
+
+#### New endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health/sources` | Per-source freshness: last fetch time, status, staleness |
+
+Trip detail (`GET /api/trips/{trip_id}`) now includes an `itinerary` field — one entry per segment with `mode`, timestamps, duration, distance, and a `train` object (GTFS trip ID, route name, headsign, board/alight stop, scheduled departure, delta) when a train match was found, or `null` for non-vehicle legs.
+
 ### Rebuild derived store
 
 Truncate and replay the full raw archive into the derived trip store:
