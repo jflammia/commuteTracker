@@ -3,6 +3,12 @@
 Draw access + (ride includes scheduled arrival) + egress; the train departs on
 schedule (we don't model missing the train here — the recommendation leaves
 margin via leave_by = dep - access_p90). Deterministic under params.mc_seed.
+
+Each call re-seeds with the SAME params.mc_seed on purpose: within one
+recommend() run every itinerary draws from the identical uniform stream, so
+options are compared under common random numbers (fair ranking, variance
+reduction) AND the whole recommendation is byte-reproducible across runs. Do
+NOT derive a per-itinerary seed — that would silently break reproducibility.
 """
 
 import random
