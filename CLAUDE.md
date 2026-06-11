@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 These are non-negotiable. Follow them even when the user doesn't explicitly ask:
 
 - **Never work around failures.** If CI fails, a push is rejected, or a workflow breaks — diagnose and fix the root cause. Do not use manual workarounds (like `gh workflow run` to bypass broken automation). The user needs to know the real state of their infrastructure.
-- **Never add AI attribution.** No `Co-Authored-By: Claude`, `Signed-off-by`, or similar trailers in commits, PRs, or any git metadata.
+- **Commit as Halley; no attribution trailers.** Agent commits are authored by `Halley (Blueshift Agent) <noreply@homelab.blueshift.xyz>` (the homelab agent identity Justin uses — do not reset it to Justin). Still never add `Co-Authored-By: Claude`, `Signed-off-by`, or similar trailers to commit/PR bodies — the author field carries the identity, the body stays clean.
 - **Always run `ruff format` before committing.** The pre-commit hook will block unformatted code. Format proactively rather than getting blocked.
 - **Every bug fix needs regression tests.** A fix without a test in `tests/test_audit_fixes.py` is incomplete. No exceptions.
 - **Verify CI after pushing.** Run `gh run list --limit 2` and confirm green. If red, fix it immediately.
@@ -128,7 +128,7 @@ Destructive operations are hard-blocked in `.claude/settings.json` (deny rules):
 ### Commits & PRs
 
 - **Conventional commits required**: `feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `style:`, `revert:`
-- **Never add AI attribution trailers** — no `Co-Authored-By: Claude`, `Signed-off-by`, or similar
+- **Author as Halley, no attribution trailers** — commits are authored by `Halley (Blueshift Agent)`; never add `Co-Authored-By: Claude`, `Signed-off-by`, or similar trailers to the body
 - **Squash merge** feature/fix PRs (PR title becomes the conventional commit release-please parses)
 - **Regular merge** release-please Release PRs (not squash — release-please needs its own commits intact)
 
