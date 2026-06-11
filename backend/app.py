@@ -63,8 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         @app.get("/{path:path}", include_in_schema=False)
         async def spa(path: str) -> FileResponse:
-            target = build_dir / path
-            if path and target.is_file():
+            target = (build_dir / path).resolve()
+            if path and target.is_file() and target.is_relative_to(build_dir.resolve()):
                 return FileResponse(target)
             return FileResponse(build_dir / "index.html")
 

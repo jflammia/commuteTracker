@@ -42,3 +42,15 @@ def test_no_build_dir_no_spa(settings):
     app = create_app(settings)  # default: no frontend build
     with TestClient(app) as c:
         assert c.get("/trips/t1").status_code == 404
+
+
+def test_spa_blocks_path_traversal(settings, tmp_path):
+    app = _app_with_build(settings, tmp_path)
+    secret = tmp_path / "secret.txt"  # sibling of the fake build dir
+    secret.write_text("TOP SECRET")
+    with TestClient(app) as c:
+        # encoded ../ — Starlette decodes %2e%2e%2f to ../ before routing
+        resp = c.get("/%2e%2e%2fsecret.txt")
+    # must NOT serve the secret; falls back to the SPA index instead
+    assert "TOP SECRET" not in resp.text
+    assert "SPA" in resp.text  # index.html fallback content from _app_with_build
