@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 
 from backend.config import Settings
+from backend.storage.archive import STREAMS
 from backend.storage.raw import RawStore
 
 
@@ -21,16 +22,21 @@ def ingestion_snapshot(settings: Settings, *, now_iso: str) -> dict:
     last_event_at = None
     today_count = 0
     if today_file.exists():
+        # Full-file read is intentional: today_event_count needs the line count anyway.
         lines = today_file.read_text(encoding="utf-8").splitlines()
         today_count = len(lines)
-        if lines:
-            last_event_at = json.loads(lines[-1])["received_at"]
+        for line in reversed(lines):
+            try:
+                last_event_at = json.loads(line).get("received_at")
+                break
+            except json.JSONDecodeError:
+                continue  # torn trailing write — fall back to previous line
 
     age = None
     if last_event_at is not None:
         age = int((now - datetime.fromisoformat(last_event_at)).total_seconds())
 
-    backlog = len(store.closed_day_files("owntracks", today=today))
+    backlog = sum(len(store.closed_day_files(s, today=today)) for s in STREAMS)
     return {
         "last_event_at": last_event_at,
         "age_seconds": age,
