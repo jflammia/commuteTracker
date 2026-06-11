@@ -13,6 +13,7 @@ def s3_settings(tmp_path):
         data_dir=tmp_path,
         s3_bucket="ct-test",
         s3_prefix="commute-tracker",
+        s3_region="us-east-1",
         passthrough_url=None,
         archive_hour_utc=6,
     )
@@ -50,3 +51,32 @@ def test_upload_failure_keeps_raw_file(s3_settings):
     assert results[0].ok is False
     raw = s3_settings.data_dir / "raw" / "owntracks" / "2026-06-09.jsonl"
     assert raw.exists()
+
+
+@mock_aws
+def test_readback_mismatch_keeps_raw_file(s3_settings, monkeypatch):
+    boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="ct-test")
+    _seed(s3_settings)
+    archiver = Archiver(s3_settings)
+
+    # Force lazy init of the real moto client so we can wrap it.
+    real_client = archiver._s3
+
+    class _TamperedBody:
+        def read(self):
+            return b"tampered bytes"
+
+    class _StubClient:
+        """Delegates everything to the real moto client except get_object."""
+
+        def put_object(self, **kwargs):
+            return real_client.put_object(**kwargs)
+
+        def get_object(self, **kwargs):
+            return {"Body": _TamperedBody()}
+
+    monkeypatch.setattr(archiver, "_s3_client", _StubClient())
+    results = archiver.run(today="2026-06-10")
+    assert results[0].ok is False
+    assert "checksum mismatch" in results[0].error
+    assert (s3_settings.data_dir / "raw" / "owntracks" / "2026-06-09.jsonl").exists()

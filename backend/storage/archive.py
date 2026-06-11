@@ -64,6 +64,16 @@ class Archiver:
     def __init__(self, settings: Settings):
         self._settings = settings
         self._store = RawStore(settings.data_dir)
+        self._s3_client = None
+
+    @property
+    def _s3(self):
+        if self._s3_client is None:
+            kwargs = {}
+            if self._settings.s3_region is not None:
+                kwargs["region_name"] = self._settings.s3_region
+            self._s3_client = boto3.client("s3", **kwargs)
+        return self._s3_client
 
     def _parquet_path(self, stream: str, day: str) -> Path:
         y, m, d = day.split("-")
@@ -110,8 +120,7 @@ class Archiver:
         y, m, d = day.split("-")
         key = f"{self._settings.s3_prefix}/raw/{stream}/year={y}/month={m}/day={d}/data.parquet"
         data = pq.read_bytes()
-        client = boto3.client("s3")
-        client.put_object(Bucket=self._settings.s3_bucket, Key=key, Body=data)
-        echoed = client.get_object(Bucket=self._settings.s3_bucket, Key=key)["Body"].read()
+        self._s3.put_object(Bucket=self._settings.s3_bucket, Key=key, Body=data)
+        echoed = self._s3.get_object(Bucket=self._settings.s3_bucket, Key=key)["Body"].read()
         if hashlib.sha256(echoed).digest() != hashlib.sha256(data).digest():
             raise RuntimeError(f"S3 read-back checksum mismatch for {key}")
