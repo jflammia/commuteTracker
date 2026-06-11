@@ -24,6 +24,34 @@ from backend.storage.archive import Archiver
 from backend.storage.raw import RawStore
 
 
+def compute_daily_recommendation(settings, store) -> None:
+    """Compute and persist today's outbound recommendation. No-op when the
+    optimizer isn't configured."""
+    if not (settings.commute_source and settings.board_stop_id and settings.alight_stop_id):
+        return
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from backend.api.optimizer import _hhmm_to_local_s, _shape
+    from backend.optimizer.params import OptimizerParams
+    from backend.optimizer.recommend import recommend
+
+    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    rec = recommend(
+        store,
+        direction="outbound",
+        source=settings.commute_source,
+        board_stop=settings.board_stop_id,
+        alight_stop=settings.alight_stop_id,
+        service_date=today.replace("-", ""),
+        arrive_by_local_s=_hhmm_to_local_s(settings.arrive_by_local),
+        access_distance_m=settings.access_distance_m,
+        egress_distance_m=settings.egress_distance_m,
+        params=OptimizerParams(),
+    )
+    store.write_recommendation(today.replace("-", ""), "outbound", _shape(rec, today))
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
 
@@ -32,6 +60,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.runner = await asyncio.to_thread(EngineRunner.start, settings)
         archiver = Archiver(settings)
         task = asyncio.create_task(run_daily(archiver.run, hour_utc=settings.archive_hour_utc))
+        # run_daily at 09:00 UTC (≈ 05:00 ET) — computed before the morning commute window
+        rec_task = asyncio.create_task(
+            run_daily(
+                lambda: compute_daily_recommendation(settings, app.state.runner.store),
+                hour_utc=9,
+            )
+        )
         # follow_redirects: GTFS mirrors commonly 301 to CDNs — without this the
         # framework would archive redirect stubs forever
         source_client = httpx.AsyncClient(follow_redirects=True)
@@ -60,6 +95,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+        rec_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await rec_task
         await app.state.passthrough.aclose()
         app.state.runner.close()
 

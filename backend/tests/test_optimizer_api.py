@@ -76,3 +76,23 @@ def test_recommendation_endpoint_reads_persisted(client):
     body = resp.json()
     assert body["direction"] == "outbound"
     assert "options" in body
+
+
+def test_compute_daily_recommendation_persists(client, settings):
+    # call the module-level job function directly with configured settings
+
+    from backend.app import compute_daily_recommendation
+
+    s = _opt_settings(settings)
+    # the client fixture already archived the schedule into s.data_dir
+    from backend.engine.runner import EngineRunner
+
+    runner = EngineRunner.start(s)
+    compute_daily_recommendation(s, runner.store)
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y%m%d")
+    rec = runner.store.recommendation(today, "outbound")
+    assert rec is not None
+    assert rec["direction"] == "outbound"
