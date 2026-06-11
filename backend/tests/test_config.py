@@ -4,7 +4,13 @@ from backend.config import Settings, load_settings
 
 
 def test_defaults(monkeypatch):
-    for var in ("CT_DATA_DIR", "CT_S3_BUCKET", "CT_PASSTHROUGH_URL", "CT_ARCHIVE_HOUR_UTC"):
+    for var in (
+        "CT_DATA_DIR",
+        "CT_S3_BUCKET",
+        "CT_S3_PREFIX",
+        "CT_PASSTHROUGH_URL",
+        "CT_ARCHIVE_HOUR_UTC",
+    ):
         monkeypatch.delenv(var, raising=False)
     s = load_settings()
     assert s.data_dir == Path("data_v2")
