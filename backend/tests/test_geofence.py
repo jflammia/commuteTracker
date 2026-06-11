@@ -26,6 +26,17 @@ def test_exit_beyond_band():
     assert resolve_geofence(GFS, lat_100m_north, -74.4000, "home") is None
 
 
+def test_transition_from_current_to_new_fence():
+    # outside home's exit band, inside work's entry radius → switches to work
+    assert resolve_geofence(GFS, 40.7500, -74.1700, "home") == "work"
+
+
+def test_unknown_current_falls_back_to_fresh_scan():
+    # current names a fence that no longer exists (config changed) — no crash
+    assert resolve_geofence(GFS, 40.7000, -74.4000, "office") == "home"
+    assert resolve_geofence(GFS, 40.7200, -74.3000, "office") is None
+
+
 def test_geofences_from_settings_skips_unset():
     s = Settings(
         data_dir=None,
