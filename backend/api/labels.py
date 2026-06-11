@@ -44,11 +44,15 @@ def make_labels_router() -> APIRouter:
 
     @router.post("/api/labels", status_code=201)
     async def post_label(request: Request) -> dict:
-        body = await request.json()
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="request body must be valid JSON") from None
         error = _validate(body)
         if error is not None:
             raise HTTPException(status_code=400, detail=error)
         record = {"received_at": datetime.now(UTC).isoformat(), "payload": body}
+        # A failure AFTER this append returns 500 but the label is archived — rebuild applies it.
         request.app.state.raw_store.append("labels", record)  # primitive first
         applied = request.app.state.runner.store.apply_label(body)
         return {"applied": applied}

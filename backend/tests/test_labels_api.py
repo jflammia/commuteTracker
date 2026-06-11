@@ -86,6 +86,12 @@ def test_post_label_validation_rejects_garbage(client, bad):
     # are primitive data
 
 
+def test_post_label_non_json_body_is_400(client):
+    c, app = client
+    resp = c.post("/api/labels", content=b"not-json", headers={"Content-Type": "application/json"})
+    assert resp.status_code == 400
+
+
 def test_trips_reviewed_filter_via_api(client):
     c, app = client
     trip_id = c.get("/api/trips").json()[0]["trip_id"]
