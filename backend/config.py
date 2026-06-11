@@ -29,6 +29,12 @@ class Settings:
     source_poll_interval_s: float = 60.0
     gtfs_refresh_interval_s: float = 86400.0
     frontend_build_dir: Path | None = None  # unset = no SPA serving
+    commute_source: str | None = None  # e.g. "gtfs_njt" — unset = optimizer disabled
+    board_stop_id: str | None = None
+    alight_stop_id: str | None = None
+    arrive_by_local: str = "09:00"  # HH:MM local target
+    access_distance_m: float = 500.0
+    egress_distance_m: float = 650.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.archive_hour_utc <= 23:
@@ -62,4 +68,10 @@ def load_settings() -> Settings:
             if os.environ.get("CT_FRONTEND_BUILD_DIR")
             else (_default_build if _default_build.is_dir() else None)
         ),
+        commute_source=os.environ.get("CT_COMMUTE_SOURCE") or None,
+        board_stop_id=os.environ.get("CT_BOARD_STOP_ID") or None,
+        alight_stop_id=os.environ.get("CT_ALIGHT_STOP_ID") or None,
+        arrive_by_local=os.environ.get("CT_ARRIVE_BY_LOCAL", "09:00"),
+        access_distance_m=float(os.environ.get("CT_ACCESS_DISTANCE_M", "500")),
+        egress_distance_m=float(os.environ.get("CT_EGRESS_DISTANCE_M", "650")),
     )

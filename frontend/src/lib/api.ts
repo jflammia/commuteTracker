@@ -58,6 +58,26 @@ export type LabelEvent = {
   value: string | boolean;
 };
 
+export interface ItineraryOption {
+  gtfs_trip_id: string;
+  route_name: string;
+  headsign: string;
+  board_stop: string;
+  alight_stop: string;
+  leave_by: string;
+  scheduled_dep: string;
+  scheduled_arr: string;
+  p50_arrive: string;
+  p90_arrive: string;
+}
+
+export interface OptimizerResult {
+  direction: string;
+  service_date: string;
+  arrive_by_local: string;
+  options: ItineraryOption[];
+}
+
 async function check(resp: Response): Promise<Response> {
   if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
   return resp;
@@ -82,4 +102,24 @@ export async function postLabel(label: LabelEvent): Promise<{ applied: boolean }
     body: JSON.stringify(label),
   });
   return (await check(resp)).json();
+}
+
+export async function getOptimizer(
+  fetchFn: typeof fetch,
+  date: string,
+  arriveBy?: string,
+): Promise<OptimizerResult> {
+  const qs = new URLSearchParams({ date });
+  if (arriveBy) qs.set('arrive_by', arriveBy);
+  const resp = await fetchFn(`/api/optimizer?${qs}`);
+  if (resp.status === 409) throw new Error('optimizer-unconfigured');
+  if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+  return resp.json();
+}
+
+export async function getRecommendation(fetchFn: typeof fetch): Promise<OptimizerResult> {
+  const resp = await fetchFn('/api/recommendation');
+  if (resp.status === 409) throw new Error('optimizer-unconfigured');
+  if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+  return resp.json();
 }

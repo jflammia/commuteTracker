@@ -4,9 +4,9 @@
 
 <nav>
   <span class="brand">CommuteTracker</span>
-  <span class="placeholder" title="Phase 5">Today</span>
+  <a href="/today">Today</a>
   <a href="/trips">Trips</a>
-  <span class="placeholder" title="Phase 5">Optimizer</span>
+  <a href="/optimizer">Optimizer</a>
   <span class="placeholder" title="Phase 6">Trends</span>
   <span class="placeholder" title="Phase 6">Health</span>
 </nav>

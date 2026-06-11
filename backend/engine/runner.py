@@ -8,6 +8,7 @@ from backend.config import Settings
 from backend.engine.machine import TripEngine
 from backend.engine.rebuild import rebuild
 from backend.engine.types import Point, TripClosed
+from backend.optimizer.legs import decompose_trip
 from backend.storage.derived import DerivedStore
 from backend.transit.matcher import match_trip
 
@@ -36,6 +37,12 @@ class EngineRunner:
                     self.store.write_train_matches(match_trip(self.store.con, ev))
                 except Exception:
                     log.exception("train matching failed — trip stored unmatched")
+                try:
+                    self.store.write_leg_observations(
+                        ev.trip.trip_id, decompose_trip(self.store.get_trip(ev.trip.trip_id))
+                    )
+                except Exception:
+                    log.exception("leg decomposition failed — trip stored without legs")
             else:
                 self.store.write_rejected(ev)
 

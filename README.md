@@ -377,6 +377,35 @@ npm run e2e          # Playwright end-to-end smoke
 npm run build        # production build (output in frontend/build/)
 ```
 
+### Optimizer
+
+The rail-aware optimizer turns matched commute history into ranked departure recommendations. Leg duration models are built from observed trips shrunk toward a schedule-derived prior (few observations → model IS the schedule; many observations → data dominates). An itinerary composer enumerates candidate scheduled trains from GTFS and ranks them by door-to-door P50/P90 arrival using seeded Monte Carlo convolution — deterministic, auditable, no numpy/scipy required.
+
+**Configuration (environment variables):**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CT_COMMUTE_SOURCE` | GTFS feed identifier (e.g. `gtfs_njt`) | — |
+| `CT_BOARD_STOP_ID` | GTFS stop ID for your home (boarding) station | — |
+| `CT_ALIGHT_STOP_ID` | GTFS stop ID for your work (alighting) terminal | — |
+| `CT_ARRIVE_BY_LOCAL` | Target arrival time `HH:MM` (America/New_York) | `09:00` |
+| `CT_ACCESS_DISTANCE_M` | Door-to-station walking/driving distance in meters | `500` |
+| `CT_EGRESS_DISTANCE_M` | Station-to-door walking distance at the work end in meters | `650` |
+
+**Endpoints:**
+
+- `GET /api/optimizer?date=YYYY-MM-DD&arrive_by=HH:MM` — what-if query; returns ranked itinerary options for any date/goal. Returns 409 if the optimizer is not configured.
+- `GET /api/recommendation` — today's precomputed recommendation (computed and cached by the daily job). Returns 409 if not configured.
+
+A daily background job precomputes the morning outbound recommendation at startup and at a configurable schedule.
+
+**Frontend views:**
+
+- **Today** — recommendation card showing the top option with P50/P90 arrivals and up to three alternatives. Shows a "not configured" message if the optimizer env vars are not set.
+- **Optimizer** — goal input (date + arrive-by time) → ranked options with a P50/P90 departure-to-arrival fan chart.
+
+> Note: live position-vs-plan tracking and push notifications are Phase 6.
+
 ### Labels API
 
 Label events are primitive data — archived like raw GPS points and replayed on every `rebuild` — so labels always take supremacy over heuristics and train-match results without any special logic.
