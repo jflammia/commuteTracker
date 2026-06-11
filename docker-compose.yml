@@ -50,5 +50,19 @@ services:
       start_period: 15s
       retries: 3
 
+  # ── New backend (rewrite phase 1) ─────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8090:8090"
+    environment:
+      CT_DATA_DIR: /data
+      CT_PASSTHROUGH_URL: http://receiver:8080/pub
+    volumes:
+      - ./data_v2:/data
+    restart: unless-stopped
+
 volumes:
   commute-data:

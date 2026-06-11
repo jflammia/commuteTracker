@@ -54,3 +54,6 @@ jobs:
 
       - name: Build image
         run: docker build -t commute-tracker:test .
+
+      - name: Build backend Docker image
+        run: docker build -f Dockerfile.backend -t commute-tracker-backend:test .

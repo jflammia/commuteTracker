@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY backend/ ./backend/
+COPY scripts/ ./scripts/
+RUN pip install --no-cache-dir fastapi uvicorn polars duckdb boto3 httpx pyarrow
+
+# No package install: backend/ is imported from the workdir
+ENV PYTHONPATH=/app
+
+EXPOSE 8090
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8090"]
