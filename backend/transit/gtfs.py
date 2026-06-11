@@ -47,17 +47,44 @@ def _rows(zf: zipfile.ZipFile, name: str) -> list[dict]:
         return list(csv.DictReader(io.TextIOWrapper(f, encoding="utf-8-sig")))
 
 
+def _filter_rows(zf: zipfile.ZipFile, name: str, keep) -> list[dict]:
+    """Stream-filter a GTFS csv: keeps memory at kept-rows size, not file size."""
+    if name not in zf.namelist():
+        return []
+    with zf.open(name) as f:
+        return [r for r in csv.DictReader(io.TextIOWrapper(f, encoding="utf-8-sig")) if keep(r)]
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_timed(value) -> bool:
+    return bool(value) and value.count(":") == 2
+
+
 def parse_gtfs(
     con: duckdb.DuckDBPyConnection, source: str, zip_bytes: bytes, *, fetched_at: str
 ) -> dict:
     zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     routes = [
-        r for r in _rows(zf, "routes.txt") if int(r.get("route_type", -1)) in RAIL_ROUTE_TYPES
+        r for r in _rows(zf, "routes.txt") if _int_or_none(r.get("route_type")) in RAIL_ROUTE_TYPES
     ]
     rail_route_ids = {r["route_id"] for r in routes}
-    trips = [t for t in _rows(zf, "trips.txt") if t["route_id"] in rail_route_ids]
+    trips = _filter_rows(zf, "trips.txt", lambda t: t.get("route_id") in rail_route_ids)
     rail_trip_ids = {t["trip_id"] for t in trips}
-    stop_times = [st for st in _rows(zf, "stop_times.txt") if st["trip_id"] in rail_trip_ids]
+    stop_times = _filter_rows(
+        zf,
+        "stop_times.txt",
+        lambda st: (
+            st.get("trip_id") in rail_trip_ids
+            and _is_timed(st.get("arrival_time"))
+            and _is_timed(st.get("departure_time"))
+        ),
+    )
     used_stop_ids = {st["stop_id"] for st in stop_times}
     stops = [s for s in _rows(zf, "stops.txt") if s["stop_id"] in used_stop_ids]
     calendar = _rows(zf, "calendar.txt")

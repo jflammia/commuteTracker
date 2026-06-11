@@ -86,3 +86,50 @@ def test_parse_gtfs_replaces_prior_rows_for_source(settings):
     parse_gtfs(store.con, "gtfs_path", snap, fetched_at="b")
     n = store.con.execute("SELECT count(*) FROM gtfs_stops").fetchone()[0]
     assert n == 2  # not 4
+
+
+def test_parse_gtfs_tolerates_malformed_route_type(settings):
+    import io
+    import zipfile
+
+    z = build_gtfs_zip(STOPS, TRIPS)
+    src = zipfile.ZipFile(io.BytesIO(z))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as out:
+        for name in src.namelist():
+            if name == "routes.txt":
+                out.writestr(
+                    name,
+                    "route_id,agency_id,route_short_name,route_long_name,route_type\n"
+                    "R1,TST,TL,Test Line,2\n"
+                    "RBAD,TST,X,Broken,\n",  # empty route_type must not crash
+                )
+            else:
+                out.writestr(name, src.read(name))
+    store = DerivedStore(settings)
+    counts = parse_gtfs(store.con, "gtfs_path", buf.getvalue(), fetched_at="x")
+    assert counts["routes"] == 1  # bad row skipped, good row kept
+
+
+def test_parse_gtfs_skips_untimed_stop_time_rows(settings):
+    import io
+    import zipfile
+
+    z = build_gtfs_zip(STOPS, [("T1", "WK", "In", [("S1", "10:00:00"), ("S2", "10:24:00")])])
+    src = zipfile.ZipFile(io.BytesIO(z))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as out:
+        for name in src.namelist():
+            if name == "stop_times.txt":
+                out.writestr(
+                    name,
+                    "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                    "T1,10:00:00,10:00:00,S1,1\n"
+                    "T1,,,SMID,2\n"  # untimed non-timepoint row: skipped, not fatal
+                    "T1,10:24:00,10:24:00,S2,3\n",
+                )
+            else:
+                out.writestr(name, src.read(name))
+    store = DerivedStore(settings)
+    counts = parse_gtfs(store.con, "gtfs_path", buf.getvalue(), fetched_at="x")
+    assert counts["stop_times"] == 2  # the two timed rows
