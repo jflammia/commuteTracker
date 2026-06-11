@@ -6,8 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY backend/ ./backend/
+# scripts/ is copied for migrate_legacy_raw only; other scripts import the legacy src/ package and will not run in this image
 COPY scripts/ ./scripts/
-RUN pip install --no-cache-dir fastapi uvicorn polars duckdb boto3 httpx pyarrow
+RUN pip install --no-cache-dir \
+    "fastapi>=0.115" "uvicorn>=0.34" "polars>=1.0" "duckdb>=1.0" \
+    "boto3>=1.35" "httpx>=0.27" "pyarrow>=18.0"
 
 # No package install: backend/ is imported from the workdir
 ENV PYTHONPATH=/app
