@@ -57,6 +57,16 @@ def rebuild(
             else:
                 store.write_rejected(ev)
                 counts["rejected"] += 1
+    # Replay label events last — label supremacy over heuristics and matches.
+    rel = q.events("labels")
+    label_rows = q.sql(
+        "SELECT CAST(payload AS VARCHAR) FROM rel ORDER BY received_at", rel=rel
+    ).fetchall()
+    for (payload_text,) in label_rows:
+        if store.apply_label(json.loads(payload_text)):
+            counts["labels_applied"] += 1
+        else:
+            counts["labels_skipped"] += 1
     log.info("rebuild complete: %s", dict(counts))
     return engine, store, dict(counts)
 

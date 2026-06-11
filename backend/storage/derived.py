@@ -5,6 +5,7 @@ Fully disposable: rebuild truncates and replays the archive. Single-writer
 to ISO-8601 UTC strings for API consumers.
 """
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -59,6 +60,10 @@ CREATE TABLE IF NOT EXISTS train_matches (
     trip_id VARCHAR, seg_index INTEGER, source VARCHAR, gtfs_trip_id VARCHAR,
     route_name VARCHAR, headsign VARCHAR, board_stop VARCHAR, alight_stop VARCHAR,
     scheduled_dep_s INTEGER, delta_s DOUBLE
+);
+CREATE TABLE IF NOT EXISTS label_overrides (
+    trip_id VARCHAR, seg_index INTEGER, kind VARCHAR, value VARCHAR,
+    labeled_at VARCHAR
 );
 """
 
@@ -162,6 +167,44 @@ class DerivedStore:
             ],
         )
 
+    _LABEL_KINDS = ("segment_mode", "train_match", "trip_flag", "trip_reviewed")
+
+    def apply_label(self, payload: dict) -> bool:
+        """Upsert one label override. Returns False when the trip is unknown
+        (e.g. engine params changed and the trip no longer exists) — the
+        primitive label event is still archived; only the application is
+        skipped."""
+        kind = payload.get("type")
+        trip_id = payload.get("trip_id")
+        seg_index = payload.get("seg_index")
+        if kind not in self._LABEL_KINDS:
+            return False
+        exists = self._con.execute("SELECT 1 FROM trips WHERE trip_id = ?", [trip_id]).fetchone()
+        if exists is None:
+            return False
+        self._con.execute(
+            "DELETE FROM label_overrides WHERE trip_id = ? AND kind = ? "
+            "AND seg_index IS NOT DISTINCT FROM ?",
+            [trip_id, kind, seg_index],
+        )
+        self._con.execute(
+            "INSERT INTO label_overrides VALUES (?,?,?,?,?)",
+            [
+                trip_id,
+                seg_index,
+                kind,
+                json.dumps(payload.get("value")),
+                datetime.now(UTC).isoformat(),
+            ],
+        )
+        return True
+
+    def _labels_for_trip(self, trip_id: str) -> list[tuple]:
+        return self._con.execute(
+            "SELECT seg_index, kind, value FROM label_overrides WHERE trip_id = ?",
+            [trip_id],
+        ).fetchall()
+
     def matches_for_trip(self, trip_id: str) -> list[dict]:
         rows = self._con.execute(
             "SELECT seg_index, source, gtfs_trip_id, route_name, headsign, "
@@ -206,17 +249,32 @@ class DerivedStore:
             "gtfs_calendar",
             "gtfs_calendar_dates",
             "train_matches",
+            "label_overrides",
         ):
             self._con.execute(f"DELETE FROM {table}")
 
-    def list_trips(self, limit: int = 50) -> list[dict]:
-        rows = self._con.execute(
-            "SELECT trip_id, start_ts, end_ts, duration_s, distance_m, point_count, "
-            "start_geofence, end_geofence, direction "
-            "FROM trips ORDER BY start_ts DESC LIMIT ?",
-            [limit],
-        ).fetchall()
-        return [self._trip_row_to_dict(r) for r in rows]
+    def list_trips(self, limit: int = 50, reviewed: bool | None = None) -> list[dict]:
+        sql = (
+            "SELECT t.trip_id, t.start_ts, t.end_ts, t.duration_s, t.distance_m, "
+            "t.point_count, t.start_geofence, t.end_geofence, t.direction, "
+            "COALESCE((SELECT value FROM label_overrides lo WHERE lo.trip_id = t.trip_id "
+            "          AND lo.kind = 'trip_reviewed'), 'false') AS reviewed_raw "
+            "FROM trips t "
+        )
+        params: list = []
+        if reviewed is not None:
+            sql += "WHERE COALESCE((SELECT value FROM label_overrides lo "
+            sql += "WHERE lo.trip_id = t.trip_id AND lo.kind = 'trip_reviewed'), 'false') = ? "
+            params.append("true" if reviewed else "false")
+        sql += "ORDER BY t.start_ts DESC LIMIT ?"
+        params.append(limit)
+        rows = self._con.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            d = self._trip_row_to_dict(r[:9])
+            d["reviewed"] = r[9] == "true"
+            out.append(d)
+        return out
 
     def get_trip(self, trip_id: str) -> dict | None:
         row = self._con.execute(
@@ -259,24 +317,41 @@ class DerivedStore:
                 [trip_id],
             ).fetchall()
         ]
+        seg_mode_overrides = {}
+        train_confirmations = {}
+        trip_flag = None
+        trip_reviewed = False
+        for seg_index, kind, value in self._labels_for_trip(trip_id):
+            v = json.loads(value)
+            if kind == "segment_mode":
+                seg_mode_overrides[seg_index] = v
+            elif kind == "train_match":
+                train_confirmations[seg_index] = v
+            elif kind == "trip_flag":
+                trip_flag = v
+            elif kind == "trip_reviewed":
+                trip_reviewed = bool(v)
+        for s in segments:
+            override = seg_mode_overrides.get(s["seg_index"])
+            s["mode_effective"] = override if override is not None else s["mode"]
+            s["mode_source"] = "label" if override is not None else "heuristic"
         match_by_seg = {m["seg_index"]: m for m in self.matches_for_trip(trip_id)}
         itinerary = [
             {
-                "mode": s["mode"],
+                "mode": s["mode_effective"],
                 "start_ts": s["start_ts"],
                 "end_ts": s["end_ts"],
                 "duration_s": s["duration_s"],
                 "distance_m": s["distance_m"],
                 "train": match_by_seg.get(s["seg_index"]),
+                "confirmation": train_confirmations.get(s["seg_index"]),
             }
             for s in segments
         ]
-        return {
-            "trip": self._trip_row_to_dict(row),
-            "segments": segments,
-            "points": points,
-            "itinerary": itinerary,
-        }
+        trip_dict = self._trip_row_to_dict(row)
+        trip_dict["flag"] = trip_flag
+        trip_dict["reviewed"] = trip_reviewed
+        return {"trip": trip_dict, "segments": segments, "points": points, "itinerary": itinerary}
 
     @staticmethod
     def _trip_row_to_dict(r) -> dict:

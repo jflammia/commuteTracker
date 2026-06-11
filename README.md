@@ -276,7 +276,9 @@ uvicorn backend.app:app --port 8090
 | `POST` | `/ingest/owntracks` | OwnTracks front door — always returns 200 |
 | `GET` | `/api/health/ingestion` | Health and backlog status |
 | `GET` | `/api/trips?limit=` | Trip list, newest first (default 50) |
+| `GET` | `/api/trips?reviewed=false` | Review queue — trips not yet confirmed |
 | `GET` | `/api/trips/{trip_id}` | Trip detail: segments + GPS points |
+| `POST` | `/api/labels` | Record a label event (see Labels API below) |
 
 ### Environment variables
 
@@ -293,7 +295,7 @@ uvicorn backend.app:app --port 8090
 
 ### External data sources
 
-Transit schedule and real-time data are fetched by a background poller. Each source is enabled by configuring its URL; leaving it unset disables that source entirely. Every fetch is archived verbatim before parsing — data is re-parseable forever and no fetch is silently discarded.
+Transit schedule and real-time data are fetched by a background poller. Each source is enabled by configuring its URL or credentials; leaving them unset disables that source entirely. Every fetch is archived verbatim before parsing — data is re-parseable forever and no fetch is silently discarded.
 A GTFS snapshot fetched while the app is running is archived immediately but only re-parsed into the schedule tables at the next startup rebuild.
 
 #### Environment variables
@@ -301,18 +303,21 @@ A GTFS snapshot fetched while the app is running is archived immediately but onl
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CT_PATH_GTFS_URL` | — | PATH GTFS static zip URL (unset = disabled) |
-| `CT_NJT_GTFS_URL` | — | NJ Transit GTFS static zip URL (unset = disabled) |
 | `CT_PATH_RT_URL` | — | PATH GTFS-RT feed URL (unset = disabled) |
-| `CT_NJT_RT_TRIPUPDATES_URL` | — | NJ Transit GTFS-RT TripUpdates URL (unset = disabled) |
-| `CT_NJT_RT_ALERTS_URL` | — | NJ Transit GTFS-RT Alerts URL (unset = disabled) |
+| `CT_NJT_USERNAME` | — | NJ Transit RailData API username (unset = NJT disabled) |
+| `CT_NJT_PASSWORD` | — | NJ Transit RailData API password |
+| `CT_NJT_API_BASE` | `https://raildata.njtransit.com/api/GTFSRT` | NJT API base URL (override for tests) |
 | `CT_SOURCE_POLL_INTERVAL_S` | `60` | How often to poll real-time feeds (seconds) |
 | `CT_GTFS_REFRESH_INTERVAL_S` | `86400` | How often to re-fetch GTFS static zips (seconds) |
+
+#### NJ Transit token-exchange auth
+
+NJT uses a token-exchange flow (not authenticated URLs). The app POSTs `username`+`password` to `/getToken`, caches the token in memory AND persists it to `<data_dir>/njt_token.txt` to survive restarts without burning daily quota. Access requires the **RailData API** product to be provisioned on your NJT developer account at <https://developer.njtransit.com> — until provisioned, the poller archives `no njt token available` errors and the health endpoint shows the failure (designed degraded mode).
 
 #### Known-good public URLs
 
 - **PATH GTFS static**: `http://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip`
 - **PATH GTFS-RT** (community-operated): `https://path.transitdata.nyc/gtfsrt`
-- **NJ Transit GTFS + GTFS-RT**: require a registered developer account at <https://developer.njtransit.com>. Supply your authenticated URLs once registered.
 
 #### New endpoints
 
@@ -347,6 +352,56 @@ To import historical data from the legacy SQLite database:
 ```bash
 python -m scripts.migrate_legacy_raw data/commute_tracker.db data_v2
 ```
+
+### Frontend
+
+A SvelteKit SPA lives in `frontend/`. It serves the trips list and a map workbench for reviewing and labeling trips. In production the compiled output is baked into the Docker image and served by FastAPI at `/`; Vite proxies `/api` and `/ingest` to the backend during development so no CORS config is needed.
+
+**Dev loop:**
+
+```bash
+# Terminal 1 — backend
+uvicorn backend.app:app --port 8090
+
+# Terminal 2 — frontend (Vite proxies /api and /ingest to :8090)
+cd frontend && npm run dev
+```
+
+**Quality checks:**
+
+```bash
+cd frontend
+npm run check        # svelte-check type checking
+npm test             # vitest unit tests
+npm run e2e          # Playwright end-to-end smoke
+npm run build        # production build (output in frontend/build/)
+```
+
+### Labels API
+
+Label events are primitive data — archived like raw GPS points and replayed on every `rebuild` — so labels always take supremacy over heuristics and train-match results without any special logic.
+
+#### `POST /api/labels`
+
+Record a label event for a trip or segment. Body fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trip_id` | string | Target trip |
+| `segment_mode` | string \| null | Override the inferred mode for a segment (`walk`, `train`, `bus`, `car`, …) |
+| `train_match` | object \| null | Override the matched train (pass `null` to clear a false positive) |
+| `trip_flag` | string \| null | Flag the trip for follow-up (`"skip"`, `"uncertain"`, …) |
+| `trip_reviewed` | bool | Mark the trip as reviewed (removes it from the review queue) |
+
+At least one of the override fields must be present. Multiple fields may be set in a single call.
+
+#### Review queue
+
+```
+GET /api/trips?reviewed=false
+```
+
+Returns trips that have not yet been confirmed, newest first. Use this to work through unreviewed trips in the labeling workbench.
 
 ## Development
 

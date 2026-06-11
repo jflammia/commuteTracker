@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.config import Settings, load_settings
+from backend.config import load_settings
 
 
 def test_defaults(monkeypatch):
@@ -20,10 +20,10 @@ def test_defaults(monkeypatch):
         "CT_WORK_LON",
         "CT_WORK_RADIUS_M",
         "CT_PATH_GTFS_URL",
-        "CT_NJT_GTFS_URL",
         "CT_PATH_RT_URL",
-        "CT_NJT_RT_TRIPUPDATES_URL",
-        "CT_NJT_RT_ALERTS_URL",
+        "CT_NJT_USERNAME",
+        "CT_NJT_PASSWORD",
+        "CT_NJT_API_BASE",
         "CT_SOURCE_POLL_INTERVAL_S",
         "CT_GTFS_REFRESH_INTERVAL_S",
     ):
@@ -58,31 +58,46 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("CT_S3_REGION", "us-east-2")
     monkeypatch.setenv("CT_PASSTHROUGH_URL", "http://legacy:8080/pub")
     monkeypatch.setenv("CT_ARCHIVE_HOUR_UTC", "7")
+    monkeypatch.delenv("CT_FRONTEND_BUILD_DIR", raising=False)
     s = load_settings()
-    assert s == Settings(
-        data_dir=Path("/srv/ct"),
-        s3_bucket="my-bucket",
-        s3_prefix="ct-prod",
-        s3_region="us-east-2",
-        passthrough_url="http://legacy:8080/pub",
-        archive_hour_utc=7,
-    )
+    assert s.data_dir == Path("/srv/ct")
+    assert s.s3_bucket == "my-bucket"
+    assert s.s3_prefix == "ct-prod"
+    assert s.s3_region == "us-east-2"
+    assert s.passthrough_url == "http://legacy:8080/pub"
+    assert s.archive_hour_utc == 7
+
+
+def test_frontend_build_dir_env_override(monkeypatch, tmp_path):
+    build = tmp_path / "build"
+    build.mkdir()
+    monkeypatch.setenv("CT_FRONTEND_BUILD_DIR", str(build))
+    s = load_settings()
+    assert s.frontend_build_dir == build
+
+
+def test_frontend_build_dir_env_nonexistent_still_used(monkeypatch, tmp_path):
+    """CT_FRONTEND_BUILD_DIR env var wins even when the path doesn't exist."""
+    dummy = tmp_path / "no-such-build"
+    monkeypatch.setenv("CT_FRONTEND_BUILD_DIR", str(dummy))
+    s = load_settings()
+    assert s.frontend_build_dir == dummy
 
 
 def test_source_env_vars(monkeypatch):
     monkeypatch.setenv("CT_PATH_GTFS_URL", "https://example.com/path.zip")
-    monkeypatch.setenv("CT_NJT_GTFS_URL", "https://user:pass@example.com/njt.zip")
     monkeypatch.setenv("CT_PATH_RT_URL", "https://example.com/path-rt")
-    monkeypatch.setenv("CT_NJT_RT_TRIPUPDATES_URL", "https://example.com/njt-tu")
-    monkeypatch.setenv("CT_NJT_RT_ALERTS_URL", "https://example.com/njt-al")
+    monkeypatch.setenv("CT_NJT_USERNAME", "myuser")
+    monkeypatch.setenv("CT_NJT_PASSWORD", "mypass")
+    monkeypatch.setenv("CT_NJT_API_BASE", "https://custom-njt.example/api/GTFSRT")
     monkeypatch.setenv("CT_SOURCE_POLL_INTERVAL_S", "30")
     monkeypatch.setenv("CT_GTFS_REFRESH_INTERVAL_S", "43200")
     s = load_settings()
     assert s.path_gtfs_url == "https://example.com/path.zip"
-    assert s.njt_gtfs_url == "https://user:pass@example.com/njt.zip"
     assert s.path_rt_url == "https://example.com/path-rt"
-    assert s.njt_rt_tripupdates_url == "https://example.com/njt-tu"
-    assert s.njt_rt_alerts_url == "https://example.com/njt-al"
+    assert s.njt_username == "myuser"
+    assert s.njt_password == "mypass"
+    assert s.njt_api_base == "https://custom-njt.example/api/GTFSRT"
     assert s.source_poll_interval_s == 30.0
     assert s.gtfs_refresh_interval_s == 43200.0
 

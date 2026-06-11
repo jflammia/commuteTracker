@@ -36,3 +36,10 @@ venv/
 .DS_Store
 Thumbs.db
 .superpowers/
+
+# Frontend
+node_modules/
+frontend/build/
+frontend/.svelte-kit/
+frontend/test-results/
+frontend/playwright-report/

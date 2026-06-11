@@ -28,13 +28,10 @@ class SourceSpec:
 
 
 def sources_from_settings(settings: Settings) -> list[SourceSpec]:
-    """A source exists iff its URL is configured."""
+    """A source exists iff its URL is configured. NJT sources use njt.py, not this registry."""
     table = (
         ("gtfs_path", settings.path_gtfs_url, settings.gtfs_refresh_interval_s),
-        ("gtfs_njt", settings.njt_gtfs_url, settings.gtfs_refresh_interval_s),
         ("rt_path", settings.path_rt_url, settings.source_poll_interval_s),
-        ("rt_njt_trips", settings.njt_rt_tripupdates_url, settings.source_poll_interval_s),
-        ("rt_njt_alerts", settings.njt_rt_alerts_url, settings.source_poll_interval_s),
     )
     return [
         SourceSpec(name=name, url=url, interval_s=interval) for name, url, interval in table if url

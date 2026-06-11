@@ -6,16 +6,19 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from backend.config import Settings, load_settings
 from backend.engine.runner import EngineRunner
 from backend.ingest.passthrough import Passthrough
+from backend.api.labels import make_labels_router
 from backend.api.trips import make_trips_router
 from backend.health.routes import make_health_router
 from backend.ingest.routes import make_ingest_router
 from backend.jobs.daily import run_daily
 from backend.sources.framework import sources_from_settings
-from backend.sources.poller import start_pollers
+from backend.sources.njt import NjtTokenManager, njt_specs_from_settings
+from backend.sources.poller import start_njt_pollers, start_pollers
 from backend.storage.archive import Archiver
 from backend.storage.raw import RawStore
 
@@ -34,10 +37,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         source_tasks = start_pollers(
             source_client, sources_from_settings(settings), app.state.raw_store
         )
+        njt_specs = njt_specs_from_settings(settings)
+        njt_tasks: list[asyncio.Task] = []
+        if njt_specs:
+            njt_manager = NjtTokenManager(
+                settings.njt_api_base,
+                settings.njt_username,
+                settings.njt_password,
+                settings.data_dir,
+            )
+            njt_tasks = start_njt_pollers(
+                source_client, njt_manager, njt_specs, app.state.raw_store
+            )
         yield
-        for st in source_tasks:
+        for st in source_tasks + njt_tasks:
             st.cancel()
-        for st in source_tasks:
+        for st in source_tasks + njt_tasks:
             with contextlib.suppress(asyncio.CancelledError):
                 await st
         await source_client.aclose()
@@ -54,6 +69,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(make_ingest_router())
     app.include_router(make_health_router())
     app.include_router(make_trips_router())
+    app.include_router(make_labels_router())
+
+    if settings.frontend_build_dir is not None and settings.frontend_build_dir.is_dir():
+        build_dir = settings.frontend_build_dir
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def spa(path: str) -> FileResponse:
+            target = (build_dir / path).resolve()
+            if path and target.is_file() and target.is_relative_to(build_dir.resolve()):
+                return FileResponse(target)
+            return FileResponse(build_dir / "index.html")
+
     return app
 
 
