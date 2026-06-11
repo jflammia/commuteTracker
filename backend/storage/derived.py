@@ -64,39 +64,41 @@ class DerivedStore:
                     t.direction,
                 ],
             )
-            self._con.executemany(
-                "INSERT INTO segments VALUES (?,?,?,?,?,?,?,?)",
-                [
+            if ev.segments:
+                self._con.executemany(
+                    "INSERT INTO segments VALUES (?,?,?,?,?,?,?,?)",
                     [
-                        s.trip_id,
-                        s.seg_index,
-                        s.mode,
-                        s.start_ts,
-                        s.end_ts,
-                        s.duration_s,
-                        s.distance_m,
-                        s.point_count,
-                    ]
-                    for s in ev.segments
-                ],
-            )
-            self._con.executemany(
-                "INSERT INTO trip_points VALUES (?,?,?,?,?,?,?,?,?)",
-                [
+                        [
+                            s.trip_id,
+                            s.seg_index,
+                            s.mode,
+                            s.start_ts,
+                            s.end_ts,
+                            s.duration_s,
+                            s.distance_m,
+                            s.point_count,
+                        ]
+                        for s in ev.segments
+                    ],
+                )
+            if ev.points:
+                self._con.executemany(
+                    "INSERT INTO trip_points VALUES (?,?,?,?,?,?,?,?,?)",
                     [
-                        t.trip_id,
-                        p.ts,
-                        p.lat,
-                        p.lon,
-                        p.accuracy_m,
-                        p.speed_mps,
-                        p.heading_deg,
-                        p.distance_m,
-                        p.geofence,
-                    ]
-                    for p in ev.points
-                ],
-            )
+                        [
+                            t.trip_id,
+                            p.ts,
+                            p.lat,
+                            p.lon,
+                            p.accuracy_m,
+                            p.speed_mps,
+                            p.heading_deg,
+                            p.distance_m,
+                            p.geofence,
+                        ]
+                        for p in ev.points
+                    ],
+                )
             self._con.execute("COMMIT")
         except Exception:
             self._con.execute("ROLLBACK")

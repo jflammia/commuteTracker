@@ -115,3 +115,13 @@ def test_list_trips_orders_newest_first(settings):
     store.write_trip_closed(_closed(trip_id="t1000", start=1000.0))
     store.write_trip_closed(_closed(trip_id="t9000", start=9000.0))
     assert [t["trip_id"] for t in store.list_trips()] == ["t9000", "t1000"]
+
+
+def test_trip_with_no_segments_or_points_writes_cleanly(settings):
+    store = DerivedStore(settings)
+    bare = TripClosed(trip=_closed().trip)  # default empty segments/points
+    store.write_trip_closed(bare)
+    assert len(store.list_trips()) == 1
+    d = store.get_trip("t1000")
+    assert d["segments"] == []
+    assert d["points"] == []
