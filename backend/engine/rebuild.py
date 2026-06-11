@@ -15,6 +15,7 @@ from backend.engine.geofence import geofences_from_settings
 from backend.engine.machine import TripEngine
 from backend.engine.params import EngineParams
 from backend.engine.types import Point, TripClosed
+from backend.optimizer.legs import decompose_trip
 from backend.storage.derived import DerivedStore
 from backend.storage.query import EventQuery
 from backend.transit.gtfs import latest_snapshot, parse_gtfs
@@ -54,6 +55,9 @@ def rebuild(
                 train_matches = match_trip(store.con, ev)
                 store.write_train_matches(train_matches)
                 counts["train_matches"] += len(train_matches)
+                legs = decompose_trip(store.get_trip(ev.trip.trip_id))
+                store.write_leg_observations(ev.trip.trip_id, legs)
+                counts["leg_observations"] += len(legs)
             else:
                 store.write_rejected(ev)
                 counts["rejected"] += 1
