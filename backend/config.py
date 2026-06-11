@@ -35,6 +35,9 @@ class Settings:
     arrive_by_local: str = "09:00"  # HH:MM local target
     access_distance_m: float = 500.0
     egress_distance_m: float = 650.0
+    owntracks_username: str | None = None  # OWNTRACKS_USERNAME (bare, not CT_*) — both
+    owntracks_password: str | None = None  # set ⇒ /pub enforces Basic Auth. Bare names
+    #                                        match the prod compose injection + homelab ADR-0001.
 
     def __post_init__(self) -> None:
         if not 0 <= self.archive_hour_utc <= 23:
@@ -74,4 +77,6 @@ def load_settings() -> Settings:
         arrive_by_local=os.environ.get("CT_ARRIVE_BY_LOCAL", "09:00"),
         access_distance_m=float(os.environ.get("CT_ACCESS_DISTANCE_M", "500")),
         egress_distance_m=float(os.environ.get("CT_EGRESS_DISTANCE_M", "650")),
+        owntracks_username=os.environ.get("OWNTRACKS_USERNAME") or None,
+        owntracks_password=os.environ.get("OWNTRACKS_PASSWORD") or None,
     )
