@@ -200,3 +200,38 @@ def parse_gtfs(
     }
     log.info("parsed %s gtfs: %s", source, counts)
     return counts
+
+
+_WEEKDAY_COLS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def active_service_ids(con: duckdb.DuckDBPyConnection, source: str, service_date: str) -> set[str]:
+    """Return the set of active service_ids for a GTFS-style YYYYMMDD date.
+
+    Applies calendar.txt base rules then calendar_dates.txt exceptions
+    (exception_type 1 = added, 2 = removed).
+
+    ``weekday_col`` is interpolated from the fixed ``_WEEKDAY_COLS`` tuple —
+    never from user input — so the f-string is safe.
+    """
+    from datetime import date
+
+    d = date(int(service_date[:4]), int(service_date[4:6]), int(service_date[6:8]))
+    weekday_col = _WEEKDAY_COLS[d.weekday()]
+    base = {
+        r[0]
+        for r in con.execute(
+            f"SELECT service_id FROM gtfs_calendar WHERE source = ? "
+            f"AND {weekday_col} = 1 AND start_date <= ? AND end_date >= ?",
+            [source, service_date, service_date],
+        ).fetchall()
+    }
+    for service_id, exception_type in con.execute(
+        "SELECT service_id, exception_type FROM gtfs_calendar_dates WHERE source = ? AND date = ?",
+        [source, service_date],
+    ).fetchall():
+        if exception_type == 1:
+            base.add(service_id)
+        elif exception_type == 2:
+            base.discard(service_id)
+    return base
