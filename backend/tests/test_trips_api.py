@@ -50,3 +50,7 @@ def test_trip_detail(client):
 
 def test_trip_detail_404(client):
     assert client.get("/api/trips/nope").status_code == 404
+
+
+def test_list_trips_negative_limit_is_422(client):
+    assert client.get("/api/trips?limit=-1").status_code == 422

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 
 def make_trips_router() -> APIRouter:
     router = APIRouter()
 
     @router.get("/api/trips")
-    async def list_trips(request: Request, limit: int = 50) -> list[dict]:
+    async def list_trips(request: Request, limit: int = Query(default=50, ge=0)) -> list[dict]:
         return request.app.state.runner.store.list_trips(limit=limit)
 
     @router.get("/api/trips/{trip_id}")
