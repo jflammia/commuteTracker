@@ -61,3 +61,15 @@ def test_append_non_string_received_at_falls_back_to_today(settings):
     path = store.append("owntracks", {"received_at": 1742400000})
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     assert path.name == f"{today}.jsonl"
+
+
+def test_streams_discovers_all_stream_dirs(settings):
+    store = RawStore(settings.data_dir)
+    store.append("owntracks", {"received_at": "2026-06-10T00:00:00+00:00"})
+    store.append("rt_path", {"received_at": "2026-06-10T00:00:00+00:00"})
+    store.append("owntracks", {"received_at": "2026-06-10T00:00:00+00:00"}, malformed=True)
+    assert store.streams() == ["owntracks", "owntracks_malformed", "rt_path"]
+
+
+def test_streams_empty_when_no_raw_dir(settings):
+    assert RawStore(settings.data_dir).streams() == []

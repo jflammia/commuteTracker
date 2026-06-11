@@ -55,3 +55,9 @@ class RawStore:
 
     def day_file(self, stream: str, day: str) -> Path:
         return self._root / stream / f"{day}.jsonl"
+
+    def streams(self) -> list[str]:
+        """Discover every stream that has ever written raw data."""
+        if not self._root.is_dir():
+            return []
+        return sorted(d.name for d in self._root.iterdir() if d.is_dir())

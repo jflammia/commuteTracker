@@ -133,6 +133,24 @@ def test_malformed_stream_uses_raw_field(settings):
     assert json.loads(payload) == "\x00garbage bytes"
 
 
+def test_archiver_covers_dynamic_streams(settings):
+    store = RawStore(settings.data_dir)
+    store.append("rt_path", {"received_at": "2026-06-08T00:00:00+00:00", "payload": {"x": 1}})
+    results = Archiver(settings).run(today="2026-06-10")
+    assert [r.stream for r in results] == ["rt_path"]
+    assert results[0].ok
+    pq = (
+        settings.data_dir
+        / "archive"
+        / "rt_path"
+        / "year=2026"
+        / "month=06"
+        / "day=08"
+        / "data.parquet"
+    )
+    assert pq.exists()
+
+
 def test_unicode_payload_round_trips(settings):
     store = RawStore(settings.data_dir)
     rec_payload = {"note": "café ☕", "nested": {"x": [1, 2]}}
