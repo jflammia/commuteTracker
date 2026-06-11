@@ -67,7 +67,7 @@ jobs:
         working-directory: frontend
 
       - name: Unit tests
-        run: npm test -- --passWithNoTests
+        run: npm test
         working-directory: frontend
 
       - name: Build
