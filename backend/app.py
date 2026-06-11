@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from backend.config import Settings, load_settings
 from backend.engine.runner import EngineRunner
 from backend.ingest.passthrough import Passthrough
+from backend.api.trips import make_trips_router
 from backend.health.routes import make_health_router
 from backend.ingest.routes import make_ingest_router
 from backend.jobs.daily import run_daily
@@ -37,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.passthrough = Passthrough(settings.passthrough_url)
     app.include_router(make_ingest_router())
     app.include_router(make_health_router())
+    app.include_router(make_trips_router())
     return app
 
 
