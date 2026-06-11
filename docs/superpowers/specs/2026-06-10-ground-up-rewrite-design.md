@@ -80,7 +80,10 @@ backend/
   ingest/        # OwnTracks endpoint (always 200), raw append
   storage/       # archive (JSONL→Parquet→S3), derived DuckDB, label store
   engine/        # trip state machine — pure, incremental, replayable
-  transit/       # GTFS static + realtime feeds, train matching
+  sources/       # pluggable external data sources (see Extensibility)
+    gtfs_njt/    #   NJ Transit GTFS static + GTFS-RT
+    gtfs_path/   #   PATH schedules + realtime departures
+  transit/       # train matching over source observations
   optimizer/     # leg models, itinerary composer, recommendation
   api/           # REST routes, SSE, schemas
   mcp/           # MCP tools over the same service layer
@@ -112,6 +115,7 @@ primitive streams:
 | Label events      | human input, can never be recomputed           |
 | GTFS-RT trip updates + service alerts (sampled/polled) | history not re-fetchable |
 | GTFS static snapshots | versioned so historical trips match the schedule in effect that day |
+| Every future source's raw responses (see Extensibility) | same rule: external observations can't be re-fetched |
 
 **Read path:** DuckDB (embedded query engine) queries the Parquet archive
 (S3 and/or local cache) plus today's JSONL tail through unified SQL views.
@@ -158,9 +162,47 @@ Per-point stages:
    The previous four-classifier voting ensemble is dropped; corridor and
    waypoint signals become *features* of the single model, not voters.
 
+## Extensibility: pluggable data sources (architectural expectation)
+
+New external data sources **will** be added over the system's life — known
+candidates (a NY Penn live departure board such as nypenn.live, with realtime
+track assignments and status) and sources that don't exist yet. The
+architecture treats this as an expectation, not an afterthought:
+
+- **`Source` plugin interface.** Every external feed is a self-contained
+  module implementing one small contract: a stream name, a polling/refresh
+  policy (cron-like, or adaptive — e.g. "high frequency during commute
+  windows"), a `fetch()` that returns raw responses, and a parser that emits
+  **typed observations** (e.g. `TrainDelay`, `TrackAssignment`,
+  `ServiceAlert`, `ScheduleVersion`). Registering a source is one module plus
+  one config entry — no changes to core code.
+- **Archive-first, always.** Every source's raw responses are archived
+  verbatim through the same JSONL → Parquet → S3 pattern, under
+  `raw/<source>/…`, *before* any parsing. External observations are primitive
+  data — you can't re-fetch the past — so the moment a source is added its
+  history starts accumulating, and any future model or matcher improvement
+  can be replayed over everything collected since day one. Parser bugs are
+  recoverable: re-parse the archive.
+- **Consumers subscribe to observation types, not sources.** Train matching
+  consumes `TrainDelay`/`ScheduleVersion` regardless of which source produced
+  them; the optimizer's leg models consume delay observations from NJT
+  GTFS-RT today and nypenn.live tomorrow without structural change. A new
+  source enriches existing consumers for free; a new observation *type* adds
+  a consumer.
+- **Model features are versioned.** The feature-extraction step for the
+  classifier and leg models declares named, versioned features. Adding a
+  feature derived from a new source means recomputing features over the
+  archive and retraining — possible precisely because raw source history is
+  archived from the start.
+- **Watchdog covers every registered source automatically** (staleness,
+  fetch failures) — registration includes the health policy.
+
+The GTFS and realtime feeds below are simply the first two plugins; the NY
+Penn departure board is the expected third.
+
 ## Transit context layer (approved)
 
-Slow-moving external data, managed as feeds beside the engine:
+Slow-moving external data, managed as source plugins (above):
 
 - **GTFS static** (NJ Transit rail + PATH): stations, routes, scheduled trips.
   Nightly refresh check; every distinct version snapshotted to the archive.
@@ -318,3 +360,4 @@ Docker build — GitHub Actions as today.
 | Optimization framing | Discrete trains/itineraries via GTFS | Continuous departure-time regression | The commute is rail; schedule carries the signal; small-N honest |
 | Platform | Web app as installable PWA + Web Push | Native iOS app; web+ntfy | Background location capture stays on battle-tested OwnTracks; no $99/yr + APNs + Xcode loop; ntfy made redundant by Web Push; native client deferred, API-ready |
 | Health UX | Proactive watchdog pushes + slim Health tab | Passive dashboard | A dashboard nobody checks doesn't protect ingestion |
+| Future data sources | Pluggable `Source` interface, archive-first, typed observations | Hard-coded feed integrations | New sources (nypenn.live, unknown future ones) are an expectation; archived history from day one makes future features retroactively trainable |
