@@ -17,3 +17,5 @@ def test_defaults_are_sane():
     assert p.min_segment_s == 30.0
     assert p.min_trip_duration_s == 120.0
     assert p.min_trip_distance_m == 300.0
+    assert p.move_min_points <= p.move_window
+    assert p.stationary_max_mps < p.walk_max_mps

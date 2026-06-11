@@ -29,6 +29,10 @@ def test_defaults(monkeypatch):
     assert s.passthrough_url is None
     assert s.archive_hour_utc == 6
     assert s.home_lat == 0.0
+    assert s.home_lon == 0.0
+    assert s.home_radius_m == 50.0
+    assert s.work_lat == 0.0
+    assert s.work_lon == 0.0
     assert s.work_radius_m == 150.0
 
 

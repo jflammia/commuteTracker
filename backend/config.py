@@ -13,10 +13,10 @@ class Settings:
     s3_region: str | None
     passthrough_url: str | None
     archive_hour_utc: int
-    home_lat: float = 0.0
+    home_lat: float = 0.0  # 0.0/0.0 (with home_lon) = geofence unset
     home_lon: float = 0.0
     home_radius_m: float = 50.0
-    work_lat: float = 0.0
+    work_lat: float = 0.0  # 0.0/0.0 (with work_lon) = geofence unset
     work_lon: float = 0.0
     work_radius_m: float = 150.0
 
