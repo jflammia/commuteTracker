@@ -74,10 +74,14 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
             type=raw,value=latest
 
+      # Releases ship the rewrite backend (FastAPI + bundled SvelteKit frontend),
+      # not the legacy Streamlit app. Older legacy image tags remain pullable in
+      # GHCR for rollback.
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: Dockerfile.backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
