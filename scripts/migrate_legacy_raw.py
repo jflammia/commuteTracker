@@ -9,13 +9,12 @@ append into a raw dir that already has files (would duplicate events).
 """
 
 import json
+import os
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
-
-from backend.storage.raw import RawStore
 
 
 def record_from_row(received_at: str, user: str, device: str, payload_text: str) -> dict:
@@ -41,8 +40,10 @@ def migrate(db_path: Path, data_dir: Path) -> dict:
         if d.exists() and any(d.glob("*.jsonl")):
             raise SystemExit(f"refusing: {d} already contains raw files")
 
-    store = RawStore(data_dir)
     per_day: Counter = Counter()
+    # Buffer JSON lines by (stream, day) so each day-file is written exactly once
+    # (one fsync per file) instead of two fsyncs per record via RawStore.append.
+    buckets: dict[tuple[str, str], list[str]] = defaultdict(list)
     con = sqlite3.connect(db_path)
     try:
         rows = con.execute(
@@ -53,18 +54,37 @@ def migrate(db_path: Path, data_dir: Path) -> dict:
         for received_at, user, device, payload_text in rows:
             try:
                 rec = record_from_row(received_at, user, device, payload_text)
-                store.append("owntracks", rec)
-                per_day[rec["received_at"][:10]] += 1
+                day = rec["received_at"][:10]
+                line = json.dumps(rec, separators=(",", ":"), ensure_ascii=False)
+                buckets[("owntracks", day)].append(line)
+                per_day[day] += 1
             except (json.JSONDecodeError, ValueError, OverflowError, OSError):
-                store.append(
-                    "owntracks",
-                    {"received_at": f"{received_at[:10]}T00:00:00+00:00", "raw": payload_text},
-                    malformed=True,
-                )
+                day = (received_at or "")[:10] or "1970-01-01"
+                rec = {"received_at": f"{day}T00:00:00+00:00", "raw": payload_text}
+                line = json.dumps(rec, separators=(",", ":"), ensure_ascii=False)
+                buckets[("owntracks_malformed", day)].append(line)
                 malformed_count += 1
             total += 1
     finally:
         con.close()
+
+    raw_root = data_dir / "raw"
+    touched_dirs: set[Path] = set()
+    for (stream, day), lines in buckets.items():
+        path = raw_root / stream / f"{day}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        touched_dirs.add(path.parent)
+    for d in touched_dirs:
+        dirfd = os.open(d, os.O_RDONLY)
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+
     return {
         "total": total,
         "migrated": total - malformed_count,
