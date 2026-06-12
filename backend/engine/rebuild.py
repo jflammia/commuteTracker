@@ -11,6 +11,7 @@ from collections import Counter
 from datetime import UTC, datetime
 
 from backend.config import Settings, load_settings
+from backend.engine.checkpoint import RebuildCheckpoint
 from backend.engine.geofence import geofences_from_settings
 from backend.engine.machine import TripEngine
 from backend.engine.params import EngineParams
@@ -25,22 +26,48 @@ log = logging.getLogger(__name__)
 
 
 def rebuild(
-    settings: Settings, params: EngineParams | None = None
+    settings: Settings, params: EngineParams | None = None, *, incremental: bool = False
 ) -> tuple[TripEngine, DerivedStore, dict]:
     store = DerivedStore(settings)
-    store.truncate()
+    engine = TripEngine(params or EngineParams(), geofences_from_settings(settings))
+
+    # Decide full vs incremental. A checkpoint is honored only when the caller
+    # asked for an incremental rebuild AND a valid one exists; otherwise we
+    # truncate and replay everything from scratch (the original behavior). The
+    # checkpoint's hwm is a DuckDB `CAST(received_at AS VARCHAR)` string written
+    # by a prior run — it never originates from external input.
+    cp = RebuildCheckpoint(settings.data_dir).load() if incremental else None
+    if cp is None:
+        store.truncate()
+        hwm = None
+    else:
+        engine.state = cp.engine_state
+        hwm = cp.hwm
+
+    # GTFS is always re-parsed from the latest snapshots (parse_gtfs is
+    # DELETE-by-source then INSERT, so re-parsing on a non-truncated store is
+    # idempotent and keeps the schedule current).
     for source in ("gtfs_path", "gtfs_njt"):
         snapshot = latest_snapshot(settings, source)
         if snapshot is not None:
             parse_gtfs(store.con, source, snapshot, fetched_at=datetime.now(UTC).isoformat())
-    engine = TripEngine(params or EngineParams(), geofences_from_settings(settings))
+
     q = EventQuery(settings)
     rel = q.events("owntracks")
+    where = ""
+    if hwm is not None:
+        # Embed a validated timestamp literal: EventQuery.sql binds only
+        # relations, not parameters. hwm is our own checkpoint string (safe).
+        where = f"WHERE received_at > CAST('{hwm}' AS TIMESTAMPTZ)"
     rows = q.sql(
-        "SELECT CAST(payload AS VARCHAR) FROM rel ORDER BY received_at", rel=rel
+        f"SELECT CAST(received_at AS VARCHAR), CAST(payload AS VARCHAR) FROM rel {where} "
+        f"ORDER BY received_at",
+        rel=rel,
     ).fetchall()
     counts: Counter = Counter()
-    for (payload_text,) in rows:
+    last_received_at = None
+    for received_at_str, payload_text in rows:
+        last_received_at = received_at_str  # rows are ASC; final value is the max
         point = Point.from_owntracks(json.loads(payload_text))
         if point is None:
             counts["skipped"] += 1
@@ -71,6 +98,14 @@ def rebuild(
             counts["labels_applied"] += 1
         else:
             counts["labels_skipped"] += 1
+
+    # Persist a checkpoint so a later incremental rebuild can resume past it.
+    # The hwm advances to the last processed owntracks event; if this run saw
+    # no new events it retains the prior hwm (no checkpoint when neither exists).
+    new_hwm = last_received_at if last_received_at is not None else hwm
+    if new_hwm is not None:
+        RebuildCheckpoint(settings.data_dir).save(hwm=new_hwm, engine_state=engine.state)
+
     log.info("rebuild complete: %s", dict(counts))
     return engine, store, dict(counts)
 
