@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.0.12](https://github.com/jflammia/commuteTracker/compare/v0.0.11...v0.0.12) (2026-06-12)
+
+
+### Features
+
+* **deploy:** cutover — /pub drop-in alias and release ships rewrite backend ([#26](https://github.com/jflammia/commuteTracker/issues/26)) ([7e76b34](https://github.com/jflammia/commuteTracker/commit/7e76b34a5f4a6e11e5c6e3c02a529172993348c2))
+* **engine:** incremental boot rebuild (replay only events past a checkpoint) ([#29](https://github.com/jflammia/commuteTracker/issues/29)) ([c058dec](https://github.com/jflammia/commuteTracker/commit/c058dec6a190e547531ba12a674979a73ccb07f8))
+* **ingest:** Basic Auth gate on /pub matching legacy prod contract ([#27](https://github.com/jflammia/commuteTracker/issues/27)) ([ba31102](https://github.com/jflammia/commuteTracker/commit/ba31102d84b7745d2c92ff3964b5f7929f9831ae))
+
+
+### Performance Improvements
+
+* **migrate:** bulk-write day-files instead of fsync-per-record ([#28](https://github.com/jflammia/commuteTracker/issues/28)) ([70844d8](https://github.com/jflammia/commuteTracker/commit/70844d83ed2bf7033dd2594560a2214df3cf70f3))
+
+
+### Documentation
+
+* commit as Halley identity, clarify attribution-trailer rule ([69503bf](https://github.com/jflammia/commuteTracker/commit/69503bf1d28eb6a8571d08a1c173b47170b79ae4))
+* **cutover:** correct runbook to traced prod reality ([70eb2df](https://github.com/jflammia/commuteTracker/commit/70eb2df58314ef9e4026ec01406cf87e12ccbb4a))
+* **cutover:** mark runbook executed; rewrite live on bighead ([2d815c0](https://github.com/jflammia/commuteTracker/commit/2d815c01405a36ee3fc6ce66520749a9a2e5ae79))
+* document the production deployment pipeline (mirror + webhook + build) ([dccac73](https://github.com/jflammia/commuteTracker/commit/dccac73aa537d7a5fdd2fa3fdba177af4ef220ac))
+* **plan:** incremental boot-rebuild implementation plan ([f3a1e0b](https://github.com/jflammia/commuteTracker/commit/f3a1e0bf969b5ec79b45ea5a0984d78a0019238c))
+
 ## [0.0.11](https://github.com/jflammia/commuteTracker/compare/v0.0.10...v0.0.11) (2026-06-11)
 
 
