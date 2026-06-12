@@ -1,7 +1,13 @@
+import json
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.engine.checkpoint import RebuildCheckpoint
+from backend.engine.rebuild import rebuild
+from backend.engine.runner import EngineRunner
 from backend.tests.synth import commute
 
 
@@ -123,3 +129,107 @@ def test_startup_rebuild_recovers_history(settings):
     app = create_app(settings)
     with TestClient(app):
         assert len(app.state.runner.store.list_trips()) == 1
+
+
+def _payload(pt):
+    return {"_type": "location", "tst": int(pt.ts), "lat": pt.lat, "lon": pt.lon}
+
+
+def _received_at(pt):
+    return datetime.fromtimestamp(pt.ts, tz=UTC).isoformat()
+
+
+def _write_raw(data_dir, points):
+    """Write Points as owntracks raw JSONL day-files (received_at from ts).
+    Mirrors test_incremental_rebuild._write_raw so a restart can replay them."""
+    by_day = {}
+    for p in points:
+        iso = _received_at(p)
+        rec = {
+            "received_at": iso,
+            "user": "justin",
+            "device": "iphone",
+            "payload": {**_payload(p), "acc": p.accuracy_m},
+        }
+        by_day.setdefault(iso[:10], []).append(json.dumps(rec))
+    d = data_dir / "raw" / "owntracks"
+    d.mkdir(parents=True, exist_ok=True)
+    for day, lines in by_day.items():
+        (d / f"{day}.jsonl").write_text("\n".join(lines) + "\n")
+
+
+def test_process_payload_checkpoints_on_trip_close(settings):
+    runner = EngineRunner.start(settings)
+    try:
+        pts, _, _ = commute()
+        n_trips_before = 0
+        closing_received_at = None
+        for pt in pts:
+            runner.process_payload(_payload(pt), received_at=_received_at(pt))
+            n_trips = len(runner.store.list_trips())
+            if n_trips > n_trips_before:
+                closing_received_at = _received_at(pt)
+                n_trips_before = n_trips
+        assert closing_received_at is not None, "no trip ever closed"
+
+        cp_path = settings.data_dir / "derived" / "rebuild_checkpoint.json"
+        assert cp_path.exists()
+        cp = RebuildCheckpoint(settings.data_dir).load()
+        assert cp is not None
+        assert cp.hwm == closing_received_at
+    finally:
+        runner.close()
+
+
+def test_close_persists_checkpoint(settings):
+    runner = EngineRunner.start(settings)
+    pts, _, _ = commute()
+    fed = pts[:5]  # a few points, no full trip
+    last_received_at = None
+    for pt in fed:
+        last_received_at = _received_at(pt)
+        runner.process_payload(_payload(pt), received_at=last_received_at)
+    runner.close()
+
+    cp_path = settings.data_dir / "derived" / "rebuild_checkpoint.json"
+    assert cp_path.exists()
+    cp = RebuildCheckpoint(settings.data_dir).load()
+    assert cp is not None
+    assert cp.hwm == last_received_at
+
+
+def test_restart_uses_incremental_and_is_stable(settings, tmp_path):
+    pts, _, _ = commute()
+
+    # Live: write raw (so a restart can replay it) and feed the runner live.
+    _write_raw(settings.data_dir, pts)
+    runner = EngineRunner.start(settings)
+    for pt in pts:
+        runner.process_payload(_payload(pt), received_at=_received_at(pt))
+    trips_live = runner.store.list_trips()
+    assert len(trips_live) == 1
+    runner.close()  # persists a checkpoint
+
+    # Restart: start() uses incremental=True; a checkpoint now exists.
+    runner2 = EngineRunner.start(settings)
+    try:
+        trips_restart = runner2.store.list_trips()
+    finally:
+        runner2.close()
+
+    # A from-scratch full rebuild over the same archive, in a clean data_dir.
+    full_dir = tmp_path / "full"
+    _write_raw(full_dir, pts)
+    full_settings = type(settings)(
+        data_dir=full_dir,
+        s3_bucket=None,
+        s3_prefix="commute-tracker",
+        s3_region=None,
+        passthrough_url=None,
+        archive_hour_utc=6,
+    )
+    _, full_store, _ = rebuild(full_settings)
+    trips_full = full_store.list_trips()
+
+    assert trips_restart == trips_live
+    assert trips_restart == trips_full

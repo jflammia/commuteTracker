@@ -149,6 +149,7 @@ class DerivedStore:
             raise
 
     def write_rejected(self, ev: PointRejected) -> None:
+        self._con.execute("DELETE FROM rejected_points WHERE ts = ?", [ev.point.ts])
         self._con.execute(
             "INSERT INTO rejected_points VALUES (?,?,?,?)",
             [ev.point.ts, ev.point.lat, ev.point.lon, ev.reason],
@@ -157,6 +158,8 @@ class DerivedStore:
     def write_train_matches(self, matches: list) -> None:
         if not matches:
             return
+        for tid in {m.trip_id for m in matches}:
+            self._con.execute("DELETE FROM train_matches WHERE trip_id = ?", [tid])
         self._con.executemany(
             "INSERT INTO train_matches VALUES (?,?,?,?,?,?,?,?,?,?)",
             [

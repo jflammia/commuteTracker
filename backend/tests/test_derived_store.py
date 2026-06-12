@@ -1,5 +1,6 @@
 from backend.engine.types import EnrichedPoint, Point, PointRejected, Segment, Trip, TripClosed
 from backend.storage.derived import DerivedStore
+from backend.transit.matcher import TrainMatch
 
 
 def _closed(trip_id="t1000", start=1000.0):
@@ -125,3 +126,40 @@ def test_trip_with_no_segments_or_points_writes_cleanly(settings):
     d = store.get_trip("t1000")
     assert d["segments"] == []
     assert d["points"] == []
+
+
+def _match(trip_id="t1", seg_index=0):
+    return TrainMatch(
+        trip_id=trip_id,
+        seg_index=seg_index,
+        source="njt",
+        gtfs_trip_id="g1",
+        route_name="Morristown Line",
+        headsign="New York",
+        board_stop="Madison",
+        alight_stop="New York Penn",
+        scheduled_dep_s=28800,
+        delta_s=12.0,
+    )
+
+
+def test_write_train_matches_idempotent_per_trip(settings):
+    store = DerivedStore(settings)
+    matches = [_match(seg_index=0), _match(seg_index=1)]
+    store.write_train_matches(matches)
+    store.write_train_matches(matches)
+    count = store.con.execute("SELECT COUNT(*) FROM train_matches WHERE trip_id = 't1'").fetchone()[
+        0
+    ]
+    assert count == 2
+
+
+def test_write_rejected_idempotent_by_ts(settings):
+    store = DerivedStore(settings)
+    rejected = PointRejected(
+        point=Point(ts=5.0, lat=1.0, lon=2.0, accuracy_m=900.0), reason="accuracy"
+    )
+    store.write_rejected(rejected)
+    store.write_rejected(rejected)
+    count = store.con.execute("SELECT COUNT(*) FROM rejected_points WHERE ts = 5.0").fetchone()[0]
+    assert count == 1
