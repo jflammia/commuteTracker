@@ -89,3 +89,32 @@ def test_refuses_rerun_when_only_malformed_exists(settings, tmp_path):
     sqlite3.connect(db).close()
     with pytest.raises(SystemExit, match="refusing"):
         migrate(db, settings.data_dir)
+
+
+def test_migrate_does_not_use_rawstore_append(settings, tmp_path, monkeypatch):
+    """Perf regression: the bulk migration must NOT call RawStore.append
+    (its per-record double-fsync is what made the migration take hours)."""
+    import backend.storage.raw as raw_mod
+
+    def boom(*a, **kw):
+        raise AssertionError("migrate must not call RawStore.append (slow path)")
+
+    monkeypatch.setattr(raw_mod.RawStore, "append", boom)
+    db = tmp_path / "legacy.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE location_records (id INTEGER PRIMARY KEY, received_at TEXT, "
+        "msg_type TEXT, user TEXT, device TEXT, payload TEXT, s3_synced_at TEXT)"
+    )
+    con.executemany(
+        "INSERT INTO location_records (received_at, msg_type, user, device, payload) "
+        "VALUES (?, 'location', 'justin', 'iphone', ?)",
+        [(f"2026-03-27 04:42:{i:02d}", '{"_type":"location","tst":1742400000}') for i in range(50)],
+    )
+    con.commit()
+    con.close()
+    report = migrate(db, settings.data_dir)
+    assert report["total"] == 50
+    files = list((settings.data_dir / "raw" / "owntracks").glob("*.jsonl"))
+    assert len(files) == 1
+    assert len(files[0].read_text().splitlines()) == 50
